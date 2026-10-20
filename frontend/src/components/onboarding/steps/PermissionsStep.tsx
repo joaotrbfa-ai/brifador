@@ -32,7 +32,7 @@ export function PermissionsStep() {
       try {
         await invoke('open_system_settings');
       } catch {
-        alert('Please enable microphone access in System Preferences > Security & Privacy > Microphone');
+        alert('Ative o acesso ao microfone em Preferências do Sistema > Segurança e Privacidade > Microfone');
       }
       return;
     }
@@ -64,7 +64,7 @@ export function PermissionsStep() {
       try {
         await invoke('open_system_settings');
       } catch {
-        alert('Please enable Audio Capture in System Settings → Privacy & Security → Audio Capture');
+        alert('Ative a Captura de áudio em Ajustes do Sistema → Privacidade e Segurança → Captura de áudio');
       }
       return;
     }
@@ -113,8 +113,8 @@ export function PermissionsStep() {
 
   return (
     <OnboardingContainer
-      title="Grant Permissions"
-      description="Meetily needs access to your microphone and system audio to record meetings"
+      title="Conceder permissões"
+      description="O Brifador precisa de acesso ao seu microfone e ao áudio do sistema para gravar reuniões. Avise os participantes antes de gravar."
       step={4}
       hideProgress={true}
       showNavigation={allPermissionsGranted}
@@ -126,8 +126,8 @@ export function PermissionsStep() {
           {/* Microphone */}
           <PermissionRow
             icon={<Mic className="w-5 h-5" />}
-            title="Microphone"
-            description="Required to capture your voice during meetings"
+            title="Microfone"
+            description="Necessário para captar sua voz durante as reuniões"
             status={permissions.microphone}
             isPending={isPending}
             onAction={handleMicrophoneAction}
@@ -136,8 +136,8 @@ export function PermissionsStep() {
           {/* System Audio */}
           <PermissionRow
             icon={<Volume2 className="w-5 h-5" />}
-            title="System Audio"
-            description="Click Enable to grant Audio Capture permission"
+            title="Áudio do sistema"
+            description="Clique em Ativar para conceder a permissão de Captura de áudio"
             status={permissions.systemAudio}
             isPending={isPending}
             onAction={handleSystemAudioAction}
@@ -147,19 +147,19 @@ export function PermissionsStep() {
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 pt-4">
           <Button onClick={handleFinish} disabled={!allPermissionsGranted} className="w-full h-11">
-            Finish Setup
+            Concluir configuração
           </Button>
 
           <button
             onClick={handleSkip}
             className="text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
           >
-            I'll do this later
+            Fazer isso depois
           </button>
 
           {!allPermissionsGranted && (
             <p className="text-xs text-center text-muted-foreground">
-              Recording won't work without permissions. You can grant them later in settings.
+              A gravação não funciona sem as permissões. Você pode concedê-las depois nas configurações.
             </p>
           )}
         </div>

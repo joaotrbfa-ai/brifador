@@ -179,7 +179,7 @@ function MeetingDetailsContent() {
 
     if (!meetingId || meetingId === 'intro-call') {
       console.warn('No valid meeting ID in URL - meetingId:', meetingId);
-      setError("No meeting selected");
+      setError("Nenhuma reunião selecionada");
       setIsLoading(false);
       Analytics.trackPageView('meeting_details');
       return;
@@ -256,7 +256,7 @@ function MeetingDetailsContent() {
             onClick={() => router.push('/')}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go Back
+            Voltar
           </button>
         </div>
       </div>

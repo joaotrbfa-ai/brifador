@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Summary, SummaryDataResponse, SummaryFormat, BlockNoteBlock } from '@/types';
 import { AISummary } from './index';
 import { Block } from '@blocknote/core';
+import { pt as blockNotePt } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import { blocksToMarkdownSafely } from '@/lib/blocknote-markdown';
@@ -83,7 +84,8 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
 
   // Create BlockNote editor for markdown parsing
   const editor = useCreateBlockNote({
-    initialContent: undefined
+    initialContent: undefined,
+    dictionary: blockNotePt
   });
 
   // Parse markdown to blocks when format is markdown

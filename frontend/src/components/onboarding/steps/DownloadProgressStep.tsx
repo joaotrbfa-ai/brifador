@@ -89,11 +89,11 @@ export function DownloadProgressStep() {
       setParakeetState((prev) => ({
         ...prev,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Retry failed',
+        error: error instanceof Error ? error.message : 'Falha ao tentar novamente',
       }));
 
-      toast.error('Download retry failed', {
-        description: 'Please check your connection and try again.',
+      toast.error('Não foi possível tentar o download novamente', {
+        description: 'Verifique sua conexão e tente novamente.',
       });
     } finally {
       // Allow retry again after 2 seconds
@@ -129,7 +129,7 @@ export function DownloadProgressStep() {
       // Call download command directly (no retry command exists for built-in AI)
       const modelName = selectedSummaryModel;
       if (!modelName) {
-        throw new Error('Summary model recommendation is not ready yet');
+        throw new Error('A recomendação do modelo de resumo ainda não está pronta');
       }
       await invoke('builtin_ai_download_model', { modelName });
     } catch (error) {
@@ -137,11 +137,11 @@ export function DownloadProgressStep() {
       setSummaryState((prev) => ({
         ...prev,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Retry failed',
+        error: error instanceof Error ? error.message : 'Falha ao tentar novamente',
       }));
 
-      toast.error('Summary model download retry failed', {
-        description: 'Please check your connection and try again.',
+      toast.error('Não foi possível tentar novamente o download do modelo de resumo', {
+        description: 'Verifique sua conexão e tente novamente.',
       });
     } finally {
       // Allow retry again after 2 seconds
@@ -355,8 +355,8 @@ export function DownloadProgressStep() {
         !actuallyAvailable &&
         (parakeetState.status === 'error' || parakeetState.status === 'cancelled')
       ) {
-        toast.error('Transcription engine required', {
-          description: 'Please retry the download before continuing.',
+        toast.error('Mecanismo de transcrição necessário', {
+          description: 'Tente baixar novamente antes de continuar.',
         });
         return;
       }
@@ -370,8 +370,8 @@ export function DownloadProgressStep() {
 
     // Show toast if downloads still in progress
     if (!downloadsComplete) {
-      toast.info('Downloads will continue in the background', {
-        description: 'You can start using the app. Recording will be available once speech recognition is ready.',
+      toast.info('Os downloads continuarão em segundo plano', {
+        description: 'Você já pode usar o app. A gravação ficará disponível quando o reconhecimento de fala estiver pronto.',
         duration: 5000,
       });
     }
@@ -391,8 +391,8 @@ export function DownloadProgressStep() {
         window.location.reload();
       } catch (error) {
         console.error('Failed to complete onboarding:', error);
-        toast.error('Failed to complete setup', {
-          description: 'Please try again.',
+        toast.error('Não foi possível concluir a configuração', {
+          description: 'Tente novamente.',
         });
         setIsCompleting(false);
       }
@@ -419,7 +419,7 @@ export function DownloadProgressStep() {
         </div>
         <div>
           {state.status === 'waiting' && (
-            <span className="text-sm text-gray-500">Waiting...</span>
+            <span className="text-sm text-gray-500">Aguardando...</span>
           )}
           {state.status === 'downloading' && (
             <Loader2 className="w-5 h-5 text-gray-700 animate-spin" />
@@ -430,10 +430,10 @@ export function DownloadProgressStep() {
             </div>
           )}
           {state.status === 'error' && (
-            <span className="text-sm text-red-500">Failed</span>
+            <span className="text-sm text-red-500">Falhou</span>
           )}
           {state.status === 'cancelled' && (
-            <span className="text-sm text-gray-500">Cancelled</span>
+            <span className="text-sm text-gray-500">Cancelado</span>
           )}
         </div>
       </div>
@@ -468,19 +468,19 @@ export function DownloadProgressStep() {
       {(state.status === 'error' || state.status === 'cancelled') && (
         <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
           <p className="text-sm text-red-600 font-medium">
-            {state.status === 'cancelled' ? 'Download cancelled' : 'Download Error'}
+            {state.status === 'cancelled' ? 'Download cancelado' : 'Erro no download'}
           </p>
           {state.error && <p className="text-xs text-red-500 mt-1">{state.error}</p>}
-          {(title === 'Transcription Engine' || title === 'Summary Engine') && (
+          {(state === parakeetState || state === summaryState) && (
             <button
-              onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}
+              onClick={state === parakeetState ? handleRetryDownload : handleRetrySummaryDownload}
               className="mt-3 w-full h-9 px-4 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Try Again
+              Tentar novamente
             </button>
           )}
         </div>
@@ -490,8 +490,8 @@ export function DownloadProgressStep() {
 
   return (
     <OnboardingContainer
-      title="Getting things ready"
-      description="You can start using Meetily after downloading the Transcription Engine."
+      title="Preparando tudo"
+      description="Você pode começar a usar o Brifador depois de baixar o mecanismo de transcrição."
       step={3}
       totalSteps={isMac ? 4 : 3}
     >
@@ -499,14 +499,14 @@ export function DownloadProgressStep() {
         {/* Download Cards */}
         <div className="w-full max-w-lg space-y-4">
           {renderDownloadCard(
-            'Transcription Engine',
+            'Mecanismo de transcrição',
             <Mic className="w-5 h-5 text-gray-600" />,
             parakeetState,
             '~670 MB'
           )}
 
           {renderDownloadCard(
-            'Summary Engine',
+            'Mecanismo de resumo',
             <Sparkles className="w-5 h-5 text-gray-600" />,
             summaryState,
             getSummaryModelSizeLabel(selectedSummaryModel || recommendedSummaryModel),
@@ -527,9 +527,9 @@ export function DownloadProgressStep() {
               <div className="flex items-start gap-3">
                 <Download className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">You can continue while this finishes</p>
+                  <p className="font-medium">Você pode continuar enquanto isso termina</p>
                   <p className="text-gray-700 mt-1">
-                    Download will continue in the background.
+                    O download continuará em segundo plano.
                   </p>
                 </div>
               </div>
@@ -547,7 +547,7 @@ export function DownloadProgressStep() {
             {(isCompleting || !parakeetDownloaded) ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              'Continue'
+              'Continuar'
             )}
           </Button>
         </div>
