@@ -17,6 +17,10 @@ permissions:
 
 env:
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+  # O llama-cpp-sys-2 repassa variáveis CMAKE_* ao CMake. No macOS o cpp-httplib
+  # acha o OpenSSL do Homebrew e não compila; o llama-helper não usa HTTPS,
+  # então escondemos o OpenSSL (o CMake só avisa e segue sem ele).
+  CMAKE_DISABLE_FIND_PACKAGE_OpenSSL: "ON"
 
 jobs:
   build:
