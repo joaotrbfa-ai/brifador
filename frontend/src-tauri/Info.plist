@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>This application needs access to your microphone to record meeting audio.</string>
+    <string>O Brifador precisa acessar o microfone para gravar o áudio das reuniões.</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>This application needs screen recording permission to capture system audio during meetings.</string>
+    <string>O Brifador precisa da permissão de gravação de tela para capturar o áudio do sistema durante as reuniões.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>This application needs permission to capture system audio output for meeting transcription and recording.</string>
+    <string>O Brifador precisa capturar o áudio do sistema para transcrever e gravar as reuniões.</string>
     <key>com.apple.security.device.audio-input</key>
     <true/>
 </dict>
