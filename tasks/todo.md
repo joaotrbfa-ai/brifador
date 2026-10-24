@@ -32,6 +32,7 @@ você anota por cima e a IA gera a nota final mesclando suas anotações com a t
 - Antes do app: `cd llama-helper && cargo build --release` e copiar `target/release/llama-helper.exe` → `frontend/src-tauri/binaries/llama-helper-x86_64-pc-windows-msvc.exe` (sidecar do Tauri)
 - Modo dev: a primeira abertura de cada página compila sob demanda (/meeting-details levou 65 s). Navegar antes de terminar quebra o router ("async/await is not yet supported in Client Components"). Espere o "✓ Compiled" no terminal e dê Ctrl+R. Não afeta o instalador.
 - GPU: MX150 (2 GB) → `TAURI_GPU_FEATURE=none` (CPU); 20 GB RAM
+- PowerShell: `$env:VAR=''` **apaga** a variável (não define vazia). O Tauri então pede senha da chave de assinatura e trava sem `.sig`. No bash use `export VAR=` e redirecione `< /dev/null`
 
 ## Fase 1 — Validar qualidade em pt-BR (antes de customizar qualquer coisa)
 - [ ] Gravar 3 áudios reais (aula, call 1:1, call com ruído), ~10 min cada
@@ -53,11 +54,11 @@ você anota por cima e a IA gera a nota final mesclando suas anotações com a t
 - [ ] Avisar com clareza que o áudio sai da máquina nesse modo
 
 ## Fase 4 — Distribuição grátis para alunos
-- [ ] GitHub Releases + auto-update do Tauri
+- [x] GitHub Releases + auto-update do Tauri (workflow `release-brifador.yml` criado; build local validado com `.sig`; falta rodar o workflow no GitHub)
 - [ ] Windows: aplicar no SignPath Foundation (assinatura grátis para OSS) — senão o SmartScreen avisa
 - [ ] macOS: sem Apple Developer ($99/ano) o app sai sem notarização → tutorial "abrir mesmo assim"; reavaliar depois
 - [ ] Onboarding: permissões de mic/áudio do sistema, download do modelo, aviso de consentimento ("avise os participantes que está gravando" — LGPD)
-- [ ] Guia de instalação curto para alunos (PT)
+- [x] Guia de instalação curto para alunos (PT) — `docs/INSTALACAO.md`
 
 ## Depois (backlog)
 - [ ] Diarização real local (sherpa-onnx speaker diarization, sem token HF) para separar várias pessoas em "Eles"
