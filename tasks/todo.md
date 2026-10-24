@@ -30,6 +30,7 @@ você anota por cima e a IA gera a nota final mesclando suas anotações com a t
 - LLVM **18** (não 23): o bindgen 0.69 do whisper-rs-sys gera `whisper_full_params` opaca com LLVM 23. `WHISPER_DONT_GENERATE_BINDINGS=1` NÃO resolve no Windows (bindings do crate foram gerados no Linux, `long` = 8 bytes → falha de layout). Depois de trocar o LLVM: `cargo clean -p whisper-rs-sys`
 - `CMAKE_POLICY_VERSION_MINIMUM=3.5` (CMake 4.x vs `cmake_minimum_required` antigo do whisper.cpp)
 - Antes do app: `cd llama-helper && cargo build --release` e copiar `target/release/llama-helper.exe` → `frontend/src-tauri/binaries/llama-helper-x86_64-pc-windows-msvc.exe` (sidecar do Tauri)
+- Modo dev: a primeira abertura de cada página compila sob demanda (/meeting-details levou 65 s). Navegar antes de terminar quebra o router ("async/await is not yet supported in Client Components"). Espere o "✓ Compiled" no terminal e dê Ctrl+R. Não afeta o instalador.
 - GPU: MX150 (2 GB) → `TAURI_GPU_FEATURE=none` (CPU); 20 GB RAM
 
 ## Fase 1 — Validar qualidade em pt-BR (antes de customizar qualquer coisa)
@@ -72,4 +73,15 @@ você anota por cima e a IA gera a nota final mesclando suas anotações com a t
 ## Pendências conhecidas
 - [ ] Textos vindos do Rust ainda em inglês (descrições de modelos, progresso/erros da retranscrição)
 - [ ] Testes VAD falham localmente: `cargo test` carrega `onnxruntime.dll` 1.17 do Windows em vez da 1.22 do projeto (copiar a DLL para `target/debug/deps` antes dos testes). Não afeta o app.
-- [ ] Gravação de teste ponta a ponta (Parakeet baixando do HF + resumo em pt-BR)
+- [x] Teste ponta a ponta (2026-10-24, notebook MX150 / 20 GB, CPU): Parakeet baixou do HF (639,6 MB, verificado); captura WASAPI mic + loopback OK; transcrição pt-BR boa (erros em palavras raras: ourives, faraós, artesãos); ~3 s por trecho; resumo qwen3.5:4b em 4m12s, caminho direto pt-BR (sem tradução); título gerado em pt-BR
+- [x] Microfone: o do PC do autor não funciona (não é bug do app). O autor faz reuniões pelo CELULAR → ver "Reuniões no celular"
+- [x] Modo dev documentado (ver "Ambiente de build"): clicar numa página que ainda está compilando quebra o router do Next ("async/await is not yet supported in Client Components"); não afeta build de produção, mas vale avisar no guia de dev
+- [x] Todos os downloads de modelo fixados em commit do HF: 4 modelos de resumo (Qwen 2B/4B, Gemma 1B/4B) e 12 do Whisper (`ggerganov/whisper.cpp@5359861`)
+- [x] Dicionário BlockNote = `pt` sobre `en` (`src/lib/blocknote-dictionary.ts`), aplicado também ao editor visível (`BlockNoteEditor/Editor.tsx`)
+
+## Reuniões no celular (decisão pendente)
+O Brifador capta o áudio do PC (mic + alto-falantes). Reunião feita no celular não passa pelo PC.
+Opções:
+- A. Entrar na reunião pelo PC (Meet/Zoom/Teams no navegador ou app) com fone → já funciona hoje
+- B. Importar o áudio gravado no celular ("Importar áudio e transcrever novamente", recurso beta) → funciona sem código novo; testar
+- C. App mobile próprio → projeto novo (Tauri mobile/React Native), escopo grande
