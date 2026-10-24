@@ -53,10 +53,10 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   const currentSummary = useMemo(() => {
     if (!summary) {
       return {
-        Agenda: { title: "Agenda", blocks: [] },
-        Decisions: { title: "Decisions", blocks: [] },
-        ActionItems: { title: "Action Items", blocks: [] },
-        ClosingRemarks: { title: "Closing Remarks", blocks: [] }
+        Agenda: { title: "Pauta", blocks: [] },
+        Decisions: { title: "Decisões", blocks: [] },
+        ActionItems: { title: "Itens de ação", blocks: [] },
+        ClosingRemarks: { title: "Considerações finais", blocks: [] }
       };
     }
     return ensureUniqueBlockIds(summary);
@@ -541,7 +541,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     const newSummary: Summary = {
       ...currentSummary,
       [newSectionKey]: {
-        title: 'New Section',
+        title: 'Nova seção',
         blocks: [{
           id: newBlockId,
           type: 'text' as const,
@@ -558,12 +558,12 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   };
 
   const convertToMarkdown = () => {
-    let markdown = `# AI Generated Summary of Meeting: ${meeting?.id || 'Unknown'} - ${meeting?.title || 'Untitled Meeting'}\n\n`;
-    markdown += `## Date: ${meeting?.created_at ? new Date(meeting.created_at).toLocaleDateString() : new Date().toLocaleDateString()}\n\n`;
+    let markdown = `# Resumo da reunião gerado por IA: ${meeting?.id || 'Desconhecida'} - ${meeting?.title || 'Reunião sem título'}\n\n`;
+    markdown += `## Data: ${meeting?.created_at ? new Date(meeting.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}\n\n`;
     
     Object.entries(currentSummary).forEach(([key, section]) => {
       if (key === 'title') {
-        markdown = `# ${section.title || 'AI Enhanced Summary'}\n\n`;
+        markdown = `# ${section.title || 'Resumo aprimorado por IA'}\n\n`;
       } else {
         markdown += `## ${section.title || key}\n\n`;
         section.blocks.forEach(block => {
@@ -609,10 +609,10 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg">
       <div className="flex items-center mb-2">
         <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2" />
-        <h3 className="text-red-700 font-medium">Error Generating Summary</h3>
+        <h3 className="text-red-700 font-medium">Erro ao gerar o resumo</h3>
       </div>
       <p className="text-red-600 text-sm">{error}</p>
-      <p className="text-red-500 text-xs mt-2">Please check your model configuration and API keys, or try again.</p>
+      <p className="text-red-500 text-xs mt-2">Verifique a configuração do modelo e as chaves de API, ou tente novamente.</p>
     </div>
   );
 
@@ -622,12 +622,12 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
         <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
         <div>
           <h3 className="text-blue-700 font-medium">
-            {status === 'processing' ? 'Processing Transcript' : 'Generating Summary'}
+            {status === 'processing' ? 'Processando a transcrição' : 'Gerando resumo'}
           </h3>
           <p className="text-blue-600 text-sm">
             {status === 'processing' 
-              ? 'Analyzing your transcript...' 
-              : 'Creating a detailed summary of your meeting...'}
+              ? 'Analisando a transcrição...' 
+              : 'Criando um resumo detalhado da reunião...'}
           </p>
         </div>
       </div>
@@ -649,8 +649,8 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   if (!hasContent && status === 'completed') {
     return (
       <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
-        <p className="text-gray-600">No summary content available.</p>
-        <p className="text-gray-500 text-sm mt-1">Try generating a new summary.</p>
+        <p className="text-gray-600">Nenhum conteúdo de resumo disponível.</p>
+        <p className="text-gray-500 text-sm mt-1">Tente gerar um novo resumo.</p>
       </div>
     );
   }
@@ -685,14 +685,14 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
             onClick={handleCopyBlocks}
           >
             <span className="text-gray-600">📋</span>
-            <span>Copy {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocks` : 'block'}</span>
+            <span>Copiar {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocos` : 'bloco'}</span>
           </button>
           <button
             className="w-full px-4 py-2 text-left hover:bg-gray-100 text-red-600 flex items-center space-x-2"
             onClick={handleDeleteBlocks}
           >
             <span>🗑️</span>
-            <span>Delete {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocks` : 'block'}</span>
+            <span>Excluir {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocos` : 'bloco'}</span>
           </button>
         </div>
       )}

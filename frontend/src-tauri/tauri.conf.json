@@ -1,8 +1,8 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-    "productName": "meetily",
-    "version": "0.4.1",
-    "identifier": "com.meetily.ai",
+    "productName": "Brifador",
+    "version": "0.1.0",
+    "identifier": "com.brifador.app",
     "build": {
         "frontendDist": "../out",
         "devUrl": "http://localhost:3118",
@@ -12,7 +12,7 @@
     "app": {
         "windows": [
             {
-                "title": "meetily",
+                "title": "Brifador",
                 "width": 1100,
                 "height": 700,
                 "resizable": true,
@@ -112,9 +112,9 @@
     },
     "plugins": {
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDQTYzMUQ3ODc5N0M4MkEKUldRcXlKZUgxekdtN09DRkVWSHNpZlJseEVOUmpNd1dDSTNaLzZ3MXJGTnY3WW1pdnlOYjBpbkIK",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwNEEyMDRDMTMzMzY1QTAKUldTZ1pUTVRUQ0JLRU1UNzc3T3NOUlo4M3RRYkhobnRmN0x2TkpmeCtZalVmbFA4c21OcXAwOCsK",
             "endpoints": [
-                "https://github.com/Zackriya-Solutions/meeting-minutes/releases/latest/download/latest.json"
+                "https://github.com/joaotrbfa-ai/brifador/releases/latest/download/latest.json"
             ]
         }
     }

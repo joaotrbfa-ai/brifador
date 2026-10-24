@@ -53,22 +53,22 @@ export interface ModelDisplayInfo {
 
 export const MODEL_DISPLAY_CONFIG: Record<string, ModelDisplayInfo> = {
   'parakeet-tdt-0.6b-v3-int8': {
-    friendlyName: 'Lightning',
+    friendlyName: 'Relâmpago',
     icon: '⚡',
-    tagline: 'Real time • Best for speed, great accuracy',
+    tagline: 'Tempo real • Melhor para velocidade, ótima precisão',
     recommended: true,
     tier: 'fastest'
   },
   'parakeet-tdt-0.6b-v2-int8': {
-    friendlyName: 'Compact',
+    friendlyName: 'Compacto',
     icon: '📦',
-    tagline: 'Real time • Smaller size',
+    tagline: 'Tempo real • Tamanho menor',
     tier: 'balanced'
   },
   'parakeet-tdt-0.6b-v3-fp32': {
-    friendlyName: 'Precise',
+    friendlyName: 'Preciso',
     icon: '🎯',
-    tagline: '20x real-time • Higher accuracy',
+    tagline: '20x tempo real • Maior precisão',
     tier: 'precise'
   }
 };
@@ -78,27 +78,30 @@ export const MODEL_DISPLAY_CONFIG: Record<string, ModelDisplayInfo> = {
 // Source: https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
 export const PARAKEET_MODEL_CONFIGS: Record<string, Partial<ParakeetModelInfo>> = {
   'parakeet-tdt-0.6b-v3-int8': {
-    description: 'Real time on M4 Max, optimized for speed',
+    description: 'Tempo real em um M4 Max, otimizado para velocidade',
     size_mb: 670, // Actual download: 652MB encoder + 18.2MB decoder + 0.2MB extras
     accuracy: 'High',
     speed: 'Ultra Fast',
     quantization: 'Int8'
   },
   'parakeet-tdt-0.6b-v2-int8': {
-    description: '25x real-time, smaller size with good accuracy',
+    description: '25x tempo real, tamanho menor com boa precisão',
     size_mb: 661, // Actual download: 652MB encoder + 9MB decoder + 0.15MB extras
     accuracy: 'High',
     speed: 'Very Fast',
     quantization: 'Int8'
   },
   'parakeet-tdt-0.6b-v3-fp32': {
-    description: '20x real-time on M4 Max, higher precision',
+    description: '20x tempo real em um M4 Max, maior precisão',
     size_mb: 2554, // Actual download: 2.44GB + 41.8MB encoder + 72.5MB decoder + 0.2MB extras
     accuracy: 'High',
     speed: 'Fast',
     quantization: 'FP32'
   }
 };
+
+export const ACCURACY_LABELS: Record<ModelAccuracy, string> = { High: 'alta', Good: 'boa', Decent: 'razoável' };
+export const SPEED_LABELS: Record<ProcessingSpeed, string> = { Slow: 'lento', Medium: 'médio', Fast: 'rápido', 'Very Fast': 'muito rápido', 'Ultra Fast': 'ultrarrápido' };
 
 // Helper functions
 export function getModelIcon(accuracy: ModelAccuracy): string {
@@ -145,11 +148,11 @@ export function isQuantizedModel(modelName: string): boolean {
 export function getModelPerformanceBadge(quantization: QuantizationType): { label: string; color: string } {
   switch (quantization) {
     case 'FP32':
-      return { label: 'Full Precision', color: 'blue' };
+      return { label: 'Precisão total', color: 'blue' };
     case 'Int8':
-      return { label: 'Int8 Quantized', color: 'green' };
+      return { label: 'Quantizado Int8', color: 'green' };
     default:
-      return { label: 'Standard', color: 'gray' };
+      return { label: 'Padrão', color: 'gray' };
   }
 }
 

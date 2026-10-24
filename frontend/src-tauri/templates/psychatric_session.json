@@ -1,64 +1,64 @@
- {
-      "name": "Psychiatric Session Note (SOAP + AI Hybrid)",
-      "description": "AI-assisted psychiatric progress note template based on SOAP, with clinical metadata and AI summary.",
-      "sections": [
-        {
-          "title": "Session Metadata",
-          "instruction": "Patient initials/ID, session date, provider, session type, duration (HIPAA-sensitive)",
-          "format": "string"
-        },
-        {
-          "title": "AI Session Summary",
-          "instruction": "One-line takeaway and one-paragraph executive summary (AI-generated). Include confidence score.",
-          "format": "paragraph"
-        },
-        {
-          "title": "Subjective (S)",
-          "instruction": "Patient's self-reported mood, symptoms, sleep, appetite, stressors",
-          "format": "paragraph"
-        },
-        {
-          "title": "Objective (O)",
-          "instruction": "Observable findings: affect, speech, behavior, orientation, vitals if relevant",
-          "format": "paragraph"
-        },
-        {
-          "title": "Assessment (A)",
-          "instruction": "Diagnostic impression, risk assessment (SI/HI), progress vs treatment goals",
-          "format": "paragraph"
-        },
-        {
-          "title": "Plan (P)",
-          "instruction": "Interventions, medication changes, referrals, therapy tasks and follow-up",
-          "format": "list",
-          "item_format": "| **Intervention** | **Owner** | **Frequency** | **Follow-up Date** |\n| --- | --- | --- | --- |"
-        },
-        {
-          "title": "Medications",
-          "instruction": "Current medications, doses, changes, and rationale",
-          "format": "list",
-          "item_format": "| **Medication** | **Dose** | **Route** | **Start/Change Date** |\n| --- | --- | --- | --- |"
-        },
-        {
-          "title": "Diagnoses (DSM/ICD)",
-          "instruction": "List diagnostic codes and working diagnosis",
-          "format": "list",
-          "item_format": "| **Code** | **System** | **Diagnosis** |\n| --- | --- | --- |"
-        },
-        {
-          "title": "Safety & Risk Management",
-          "instruction": "Safety plan, emergency contacts, hospitalization considerations",
-          "format": "paragraph"
-        },
-        {
-          "title": "Next Appointment",
-          "instruction": "Date, time and modality of next session",
-          "format": "string"
-        },
-        {
-          "title": "Audit Trail",
-          "instruction": "Human review flag, reviewer name and timestamp, AI version",
-          "format": "paragraph"
-        }
-      ]
+{
+  "name": "Nota de sessão psiquiátrica (SOAP + IA)",
+  "description": "Modelo de evolução psiquiátrica assistida por IA, baseado no SOAP, com metadados clínicos e resumo gerado por IA.",
+  "sections": [
+    {
+      "title": "Metadados da sessão",
+      "instruction": "Informe iniciais ou ID do paciente, data da sessão, profissional responsável, tipo de sessão e duração (dados sensíveis, protegidos pela LGPD).",
+      "format": "string"
+    },
+    {
+      "title": "Resumo da sessão (IA)",
+      "instruction": "Escreva uma frase com a principal conclusão e um parágrafo de resumo executivo (gerado por IA). Inclua o nível de confiança.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Subjetivo (S)",
+      "instruction": "Descreva o relato do paciente sobre humor, sintomas, sono, apetite e estressores, incluindo a queixa principal.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Objetivo (O)",
+      "instruction": "Descreva os achados observáveis: afeto, fala, comportamento, orientação e sinais vitais, se relevante.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Avaliação (A)",
+      "instruction": "Descreva a impressão diagnóstica, a avaliação de risco (ideação suicida e homicida) e a evolução em relação às metas terapêuticas.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Plano terapêutico (P)",
+      "instruction": "Liste intervenções, mudanças de medicação, encaminhamentos, tarefas terapêuticas e retorno.",
+      "format": "list",
+      "item_format": "| **Intervenção** | **Responsável** | **Frequência** | **Data do retorno** |\n| --- | --- | --- | --- |"
+    },
+    {
+      "title": "Medicações",
+      "instruction": "Liste as medicações atuais, doses, alterações e justificativas.",
+      "format": "list",
+      "item_format": "| **Medicação** | **Dose** | **Via** | **Data de início/alteração** |\n| --- | --- | --- | --- |"
+    },
+    {
+      "title": "Diagnósticos (DSM/CID)",
+      "instruction": "Liste os códigos diagnósticos e a hipótese diagnóstica atual.",
+      "format": "list",
+      "item_format": "| **Código** | **Sistema** | **Diagnóstico** |\n| --- | --- | --- |"
+    },
+    {
+      "title": "Segurança e manejo de risco",
+      "instruction": "Descreva o plano de segurança, os contatos de emergência e as considerações sobre internação.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Próxima consulta",
+      "instruction": "Informe data, horário e modalidade da próxima sessão.",
+      "format": "string"
+    },
+    {
+      "title": "Trilha de auditoria",
+      "instruction": "Informe se houve revisão humana, nome do revisor, data e horário da revisão e versão da IA.",
+      "format": "paragraph"
     }
+  ]
+}

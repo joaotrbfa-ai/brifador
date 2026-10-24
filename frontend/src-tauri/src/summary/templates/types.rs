@@ -72,7 +72,7 @@ impl Template {
 
     /// Generates a clean markdown template structure
     pub fn to_markdown_structure(&self) -> String {
-        let mut markdown = String::from("# <Add Title here>\n\n");
+        let mut markdown = String::from("# <Título da reunião>\n\n");
 
         for section in &self.sections {
             markdown.push_str(&format!("**{}**\n\n", section.title));
@@ -84,12 +84,12 @@ impl Template {
     /// Generates section-specific instructions for the LLM
     pub fn to_section_instructions(&self) -> String {
         let mut instructions = String::from(
-            "- **For the main title (`# [AI-Generated Title]`):** Analyze the entire transcript and create a concise, descriptive title for the meeting.\n"
+            "- **Para o título principal (`# <Título da reunião>`):** analise a transcrição inteira e crie um título curto e descritivo para a reunião.\n"
         );
 
         for section in &self.sections {
             instructions.push_str(&format!(
-                "- **For the '{}' section:** {}.\n",
+                "- **Para a seção '{}':** {}\n",
                 section.title, section.instruction
             ));
 
@@ -99,7 +99,7 @@ impl Template {
 
             if let Some(format) = item_format {
                 instructions.push_str(&format!(
-                    "  - Items in this section should follow the format: `{}`.\n",
+                    "  - Os itens desta seção devem seguir o formato: `{}`.\n",
                     format
                 ));
             }
