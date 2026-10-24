@@ -1,0 +1,102 @@
+name: Release Brifador
+
+# Gera os instaladores do Brifador (Windows x64 e macOS Apple Silicon) e cria
+# um Release em rascunho com eles e o latest.json do atualizador.
+# Sem assinatura de código: Windows mostra o aviso do SmartScreen e o macOS
+# pede "botão direito → Abrir" na primeira vez (ver docs/INSTALACAO.md).
+#
+# Segredos necessários no repositório:
+#   TAURI_SIGNING_PRIVATE_KEY           conteúdo de ~/.tauri/brifador-updater.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  vazio (a chave foi gerada sem senha)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            helper_features: ""
+            helper_bin: llama-helper.exe
+            sidecar: llama-helper-x86_64-pc-windows-msvc.exe
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            helper_features: "--features metal"
+            helper_bin: llama-helper
+            sidecar: llama-helper-aarch64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # O bindgen 0.69 do whisper-rs-sys gera structs opacas com LLVM muito novo.
+      - name: Instalar LLVM 18 (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "18.1.8"
+
+      - name: Apontar LIBCLANG_PATH (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: echo "LIBCLANG_PATH=$LLVM_PATH/bin" >> "$GITHUB_ENV"
+
+      - name: Dependências do frontend
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar o sidecar llama-helper
+        shell: bash
+        run: |
+          cargo build --release -p llama-helper ${{ matrix.helper_features }}
+          mkdir -p frontend/src-tauri/binaries
+          cp "target/release/${{ matrix.helper_bin }}" "frontend/src-tauri/binaries/${{ matrix.sidecar }}"
+
+      - name: Gerar instaladores e o Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: frontend
+          args: --target ${{ matrix.target }}
+          tagName: v__VERSION__
+          releaseName: Brifador v__VERSION__
+          releaseBody: |
+            Transcritor de reuniões grátis, local e sem bot.
+            Como instalar: https://github.com/${{ github.repository }}/blob/main/docs/INSTALACAO.md
+            - Windows: baixe o arquivo `_x64-setup.exe`
+            - Mac (Apple Silicon): baixe o arquivo `.dmg`
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
