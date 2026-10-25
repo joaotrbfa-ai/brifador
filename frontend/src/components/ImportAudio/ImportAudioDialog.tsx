@@ -36,6 +36,8 @@ import { useImportAudio, ImportResult } from '@/hooks/useImportAudio';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from '../Sidebar/SidebarProvider';
 import { LANGUAGES } from '@/constants/languages';
+import { defaultBatchLanguage } from '@/lib/finalTranscription';
+import { getAudioFormatsDisplayList } from '@/constants/audioFormats';
 import { useTranscriptionModels, ModelOption } from '@/hooks/useTranscriptionModels';
 
 
@@ -75,7 +77,7 @@ export function ImportAudioDialog({
   const { selectedLanguage, transcriptModelConfig } = useConfig();
 
   const [title, setTitle] = useState('');
-  const [selectedLang, setSelectedLang] = useState(selectedLanguage || 'auto');
+  const [selectedLang, setSelectedLang] = useState(defaultBatchLanguage(selectedLanguage));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [titleModifiedByUser, setTitleModifiedByUser] = useState(false);
 
@@ -101,7 +103,7 @@ export function ImportAudioDialog({
     refetchMeetings();
     onComplete?.();
     onOpenChange(false);
-    router.push(`/meeting-details?id=${result.meeting_id}`);
+    router.push(`/meeting-details?id=${result.meeting_id}&source=import`);
   }, [router, refetchMeetings, onComplete, onOpenChange]);
 
   const handleImportError = useCallback((error: string) => {
@@ -137,7 +139,7 @@ export function ImportAudioDialog({
       resetSelection();
       setTitle('');
       setTitleModifiedByUser(false);
-      setSelectedLang(selectedLanguage || 'auto');
+      setSelectedLang(defaultBatchLanguage(selectedLanguage));
       setShowAdvanced(false);
 
       // Validate preselected file if provided
@@ -321,7 +323,7 @@ export function ImportAudioDialog({
                       </>
                     )}
                   </Button>
-                  <p className="text-sm text-gray-500 mt-2">MP4, WAV, MP3, FLAC, OGG, MKV, WebM, WMA</p>
+                  <p className="text-sm text-gray-500 mt-2">{getAudioFormatsDisplayList()}</p>
                 </div>
               )}
 
@@ -395,7 +397,7 @@ export function ImportAudioDialog({
                                   key={`${model.provider}:${model.name}`}
                                   value={`${model.provider}:${model.name}`}
                                 >
-                                  {model.displayName} ({Math.round(model.size_mb)} MB)
+                                  {model.displayName}{model.size_mb > 0 ? ` (${Math.round(model.size_mb)} MB)` : ''}
                                 </SelectItem>
                               ))}
                             </SelectContent>

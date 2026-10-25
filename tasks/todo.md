@@ -40,6 +40,20 @@ você anota por cima e a IA gera a nota final mesclando suas anotações com a t
 - [ ] Definir o modelo padrão por perfil de máquina (sem GPU / com GPU / Apple Silicon)
 - [ ] Testar modelos Ollama para resumo em pt-BR (ex.: Qwen, Gemma, Llama na faixa 4–8B) e anotar qualidade × RAM
 
+## Fase 1.5 — Qualidade da transcrição + Claude no resumo (2026-10-25)
+Diagnóstico: ao vivo, o Parakeet recebe trechos de ~3 s sem contexto (frases picotadas) e o áudio chega
+abafado por um reamostrador 48→16 kHz tosco (`audio/vad.rs`). Decisão: **transcrição final sempre pela
+Groq** (whisper-large-v3, free tier, chave própria); ao vivo continua local só para acompanhar.
+- [ ] Fase 0 (autor): validar a Groq no Playground com o `audio.mp4` de uma chamada real
+- [ ] `audio/groq_transcription.rs`: blocos ≤ 10 min cortados em pausas do VAD, WAV 16 kHz, `verbose_json`, filtro de alucinação, retry 429/5xx
+- [ ] Provedor `groq` em "Aprimorar" (`retranscription.rs`) e "Importar" (`import.rs`)
+- [ ] Configuração: chave (coluna `groqApiKey`), liga/desliga e vocabulário; aviso de que o áudio vai para a Groq
+- [ ] Ao parar a gravação: Groq automática → recarrega transcrição → resumo (falhou → resume a ao vivo)
+- [ ] Formatos do celular: fallback para ffmpeg (WhatsApp `.ogg` Opus, iPhone sem perdas, `.opus`/`.amr`/`.3gp`/`.caf`)
+- [ ] Claude: API `2026-10-21`, `max_tokens` 16000, fallback de recusa, `stop_reason`, retry, modelos `claude-opus-5-5`/`claude-sonnet-5-5`/`claude-haiku-5-5`
+- [ ] Prompt do resumo: avisar que a transcrição automática tem erros
+- [ ] Ao vivo: reamostrador rubato no VAD; Whisper no Windows com `temperature` 0.0
+
 ## Fase 2 — O diferencial Granola: notas do usuário + IA
 - [ ] Editor de notas durante a reunião (com timestamp de cada linha)
 - [ ] Prompt de "enhance": as notas do usuário guiam o que importa na transcrição

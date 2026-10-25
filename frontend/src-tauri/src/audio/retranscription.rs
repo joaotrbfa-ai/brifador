@@ -4,6 +4,7 @@ use crate::audio::decoder::decode_audio_file;
 use crate::audio::vad::get_speech_chunks_with_progress;
 use super::common::{create_transcript_segments, split_segment_at_silence, write_transcripts_json};
 use super::constants::AUDIO_EXTENSIONS;
+use super::groq_transcription::{load_groq_options, transcribe_with_groq, GROQ_PROVIDER};
 use crate::config::{DEFAULT_WHISPER_MODEL, DEFAULT_PARAKEET_MODEL};
 use crate::parakeet_engine::ParakeetEngine;
 use crate::state::AppState;
@@ -103,10 +104,14 @@ pub async fn start_retranscription<R: Runtime>(
     RETRANSCRIPTION_CANCELLED.store(false, Ordering::SeqCst);
 
     let use_parakeet = provider.as_deref() == Some("parakeet");
+    let use_groq = provider.as_deref() == Some(GROQ_PROVIDER);
     let result = run_retranscription(app.clone(), meeting_id.clone(), meeting_folder_path, language, model, provider).await;
 
-    // Unload the engine after the batch job (success, failure, or cancellation)
-    super::common::unload_engine_after_batch(use_parakeet).await;
+    // Unload the engine after the batch job (success, failure, or cancellation).
+    // Groq runs in the cloud, so no local engine was loaded.
+    if !use_groq {
+        super::common::unload_engine_after_batch(use_parakeet).await;
+    }
 
     // Guard will automatically clear flag on drop
     // No need for manual: RETRANSCRIPTION_IN_PROGRESS.store(false, Ordering::SeqCst);
@@ -189,6 +194,13 @@ async fn run_retranscription<R: Runtime>(
         meeting_id, language, model, provider
     );
 
+    // Fail before the slow decode/VAD steps if Groq is not configured
+    let groq_options = if provider.as_deref() == Some(GROQ_PROVIDER) {
+        Some(load_groq_options(&app, language.clone(), model.clone()).await?)
+    } else {
+        None
+    };
+
     // Emit progress: decoding
     emit_progress(&app, &meeting_id, "decoding", 5, "Decoding audio file...");
 
@@ -219,11 +231,11 @@ async fn run_retranscription<R: Runtime>(
     }
 
     // Convert to 16kHz mono format (CPU-intensive, run in blocking task)
-    let audio_samples = tokio::task::spawn_blocking(move || {
+    let audio_samples = Arc::new(tokio::task::spawn_blocking(move || {
         decoded.to_whisper_format()
     })
     .await
-    .map_err(|e| anyhow!("Resample task panicked: {}", e))?;
+    .map_err(|e| anyhow!("Resample task panicked: {}", e))?);
     info!("Converted to 16kHz mono format: {} samples", audio_samples.len());
 
     emit_progress(&app, &meeting_id, "vad", 20, "Detecting speech segments...");
@@ -238,8 +250,10 @@ async fn run_retranscription<R: Runtime>(
     // For large files (35+ minutes), VAD processing can take several minutes
     let app_for_vad = app.clone();
     let meeting_id_for_vad = meeting_id.clone();
+    let samples_for_vad = Arc::clone(&audio_samples);
 
     let speech_segments = tokio::task::spawn_blocking(move || {
+        let audio_samples = samples_for_vad;
         get_speech_chunks_with_progress(
             &audio_samples,
             VAD_REDEMPTION_TIME_MS,
@@ -297,10 +311,41 @@ async fn run_retranscription<R: Runtime>(
         return Err(anyhow!("No speech detected in audio file"));
     }
 
-    emit_progress(&app, &meeting_id, "transcribing", 25, "Loading transcription engine...");
+    // Cloud path: send the whole recording to Groq in long chunks cut at pauses
+    let mut all_transcripts: Vec<(String, f64, f64)> = Vec::new(); // (text, start_ms, end_ms)
+    let mut total_confidence = 0.0f32;
+    if let Some(options) = &groq_options {
+        emit_progress(&app, &meeting_id, "transcribing", 25, "Enviando o áudio para a Groq...");
+        let speech_ms: Vec<(f64, f64)> = speech_segments
+            .iter()
+            .map(|s| (s.start_timestamp_ms, s.end_timestamp_ms))
+            .collect();
+        all_transcripts = transcribe_with_groq(
+            &audio_samples,
+            &speech_ms,
+            options,
+            |done, total| {
+                let progress = 25 + ((done as f32 / total.max(1) as f32) * 55.0) as u32;
+                emit_progress(
+                    &app,
+                    &meeting_id,
+                    "transcribing",
+                    progress,
+                    &format!("Transcrevendo na Groq: parte {} de {}...", (done + 1).min(total), total),
+                );
+            },
+            || RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst),
+        )
+        .await?;
+        total_confidence = all_transcripts.len() as f32;
+    } else {
+        emit_progress(&app, &meeting_id, "transcribing", 25, "Loading transcription engine...");
+    }
+    let use_groq = groq_options.is_some();
+    drop(audio_samples);
 
     // Initialize the appropriate engine once (not per-segment)
-    let whisper_engine = if !use_parakeet {
+    let whisper_engine = if !use_parakeet && !use_groq {
         Some(get_or_init_whisper(&app, model.as_deref()).await?)
     } else {
         None
@@ -317,7 +362,7 @@ async fn run_retranscription<R: Runtime>(
     const MAX_SEGMENT_SAMPLES: usize = 25 * 16000; // 25 seconds at 16kHz
 
     let mut processable_segments: Vec<crate::audio::vad::SpeechSegment> = Vec::new();
-    for segment in &speech_segments {
+    for segment in speech_segments.iter().filter(|_| !use_groq) {
         if segment.samples.len() > MAX_SEGMENT_SAMPLES {
             debug!(
                 "Splitting large segment ({:.0}ms, {} samples) at silence boundaries",
@@ -336,10 +381,7 @@ async fn run_retranscription<R: Runtime>(
     let processable_count = processable_segments.len();
     info!("Processing {} segments (after splitting)", processable_count);
 
-    // Process each speech segment with progress updates
-    let mut all_transcripts: Vec<(String, f64, f64)> = Vec::new(); // (text, start_ms, end_ms)
-    let mut total_confidence = 0.0f32;
-
+    // Process each speech segment with progress updates (local engines only)
     for (i, segment) in processable_segments.iter().enumerate() {
         // Check for cancellation before each segment
         if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
