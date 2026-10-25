@@ -1,38 +1,38 @@
 {
-  "name": "Daily Standup",
-  "description": "Time-boxed daily updates for engineering/product teams.",
+  "name": "Daily (reunião diária)",
+  "description": "Atualizações diárias de tempo limitado para equipes de engenharia e produto.",
   "sections": [
     {
-      "title": "Date",
-      "instruction": "YYYY-MM-DD",
+      "title": "Data",
+      "instruction": "AAAA-MM-DD",
       "format": "string"
     },
     {
-      "title": "Attendees",
-      "instruction": "List of participants present",
+      "title": "Participantes",
+      "instruction": "Liste os participantes presentes.",
       "format": "list"
     },
     {
-      "title": "Yesterday",
-      "instruction": "What I completed yesterday (short bullets)",
+      "title": "Ontem",
+      "instruction": "Descreva o que foi concluído ontem (tópicos curtos).",
       "format": "list",
-      "example_item_format": "| **Owner** | **Completed Work** |\n| --- | --- |"
+      "example_item_format": "| **Responsável** | **Trabalho concluído** |\n| --- | --- |"
     },
     {
-      "title": "Today",
-      "instruction": "Planned work for today (short bullets)",
+      "title": "Hoje",
+      "instruction": "Descreva o trabalho planejado para hoje (tópicos curtos).",
       "format": "list",
-      "example_item_format": "| **Owner** | **Planned Work** |\n| --- | --- |"
+      "example_item_format": "| **Responsável** | **Trabalho planejado** |\n| --- | --- |"
     },
     {
-      "title": "Blockers",
-      "instruction": "Any impediments and owner if known",
+      "title": "Impedimentos",
+      "instruction": "Liste os impedimentos e o responsável, se conhecido.",
       "format": "list",
-      "item_format": "| **Owner** | **Blocker** | Impact |\n| --- | --- | --- |"
+      "item_format": "| **Responsável** | **Impedimento** | Impacto |\n| --- | --- | --- |"
     },
     {
-      "title": "Notes",
-      "instruction": "Optional quick notes or announcements",
+      "title": "Observações",
+      "instruction": "Inclua observações rápidas ou avisos, se houver.",
       "format": "paragraph"
     }
   ]

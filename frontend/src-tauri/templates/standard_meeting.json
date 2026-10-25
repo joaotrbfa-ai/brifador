@@ -1,26 +1,26 @@
 {
-  "name": "Standard Meeting Notes",
-  "description": "A standard template for general meetings, focusing on key outcomes and actions.",
+  "name": "Ata de reunião padrão",
+  "description": "Modelo padrão para reuniões em geral, com foco nos principais resultados e ações.",
   "sections": [
     {
-      "title": "Summary",
-      "instruction": "Provide a brief, one-paragraph executive summary of the entire meeting.",
+      "title": "Resumo",
+      "instruction": "Escreva um resumo executivo breve, em um parágrafo, de toda a reunião.",
       "format": "paragraph"
     },
     {
-      "title": "Key Decisions",
-      "instruction": "List the most important decisions made during the meeting.",
+      "title": "Decisões importantes",
+      "instruction": "Liste as decisões mais importantes tomadas na reunião.",
       "format": "list"
     },
     {
-      "title": "Action Items",
-      "instruction": "List all assigned tasks with their owners and due date. Always add reference transcript segment and timestamp in the table.",
+      "title": "Itens de ação",
+      "instruction": "Liste todas as tarefas atribuídas, com responsáveis e prazos. Sempre inclua na tabela o trecho da transcrição e o horário de referência.",
       "format": "list",
-      "item_format": "| **Owner** | Task | Due | Reference Transcript Segment | Segment Time stamp |\n| --- | --- | --- | --- | --- |"
+      "item_format": "| **Responsável** | Tarefa | Prazo | Trecho da transcrição | Horário |\n| --- | --- | --- | --- | --- |"
     },
     {
-      "title": "Discussion Highlights",
-      "instruction": "Summarize the main topics of discussion, key arguments, and important insights.",
+      "title": "Destaques da discussão",
+      "instruction": "Resuma os principais tópicos discutidos, os argumentos centrais e os insights importantes.",
       "format": "paragraph"
     }
   ]

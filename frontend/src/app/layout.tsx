@@ -123,8 +123,8 @@ export default function RootLayout({
       console.log('[Layout] Received request-recording-toggle from tray');
 
       if (showOnboarding) {
-        toast.error("Please complete setup first", {
-          description: "You need to finish onboarding before you can start recording."
+        toast.error("Conclua a configuração primeiro", {
+          description: "Você precisa terminar os primeiros passos antes de iniciar a gravação."
         });
       } else {
         // If in main app, forward to useRecordingStart via window event
@@ -144,8 +144,8 @@ export default function RootLayout({
     const betaFeatures = loadBetaFeatures();
 
     if (!betaFeatures.importAndRetranscribe) {
-      toast.error('Beta feature disabled', {
-        description: 'Enable "Import Audio & Retranscribe" in Settings > Beta to use this feature.'
+      toast.error('Recurso beta desativado', {
+        description: 'Ative "Importar áudio e transcrever novamente" em Configurações > Beta para usar este recurso.'
       });
       return;
     }
@@ -161,8 +161,8 @@ export default function RootLayout({
       setImportFilePath(audioFile);
       setShowImportDialog(true);
     } else if (paths.length > 0) {
-      toast.error('Please drop an audio file', {
-        description: `Supported formats: ${getAudioFormatsDisplayList()}`
+      toast.error('Solte um arquivo de áudio', {
+        description: `Formatos compatíveis: ${getAudioFormatsDisplayList()}`
       });
     }
   }, []);

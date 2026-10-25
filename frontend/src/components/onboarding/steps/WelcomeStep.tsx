@@ -10,22 +10,22 @@ export function WelcomeStep() {
   const features = [
     {
       icon: Lock,
-      title: 'Your data never leaves your device',
+      title: 'Seus dados nunca saem do seu dispositivo',
     },
     {
       icon: Sparkles,
-      title: 'Intelligent summaries & insights',
+      title: 'Resumos e insights inteligentes',
     },
     {
       icon: Cpu,
-      title: 'Works offline, no cloud required',
+      title: 'Funciona offline, sem precisar de nuvem',
     },
   ];
 
   return (
     <OnboardingContainer
-      title="Welcome to Brifador"
-      description="Record. Transcribe. Summarize. All on your device."
+      title="Bem-vindo ao Brifador"
+      description="Grave. Transcreva. Resuma. Tudo no seu dispositivo."
       step={1}
       hideProgress={true}
     >
@@ -56,9 +56,10 @@ export function WelcomeStep() {
             onClick={goNext}
             className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            Get Started
+            Começar
           </Button>
-          <p className="text-xs text-center text-muted-foreground">Takes less than 3 minutes</p>
+          <p className="text-xs text-center text-muted-foreground">Leva menos de 3 minutos</p>
+          <p className="text-xs text-center text-muted-foreground">Avise os participantes antes de gravar.</p>
         </div>
       </div>
     </OnboardingContainer>
