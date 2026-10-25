@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { GROQ_MODEL, GROQ_PROVIDER, getFinalTranscriptionSettings } from '@/lib/finalTranscription';
 
 export interface RawModelInfo {
   name: string;
@@ -8,7 +9,7 @@ export interface RawModelInfo {
 }
 
 export interface ModelOption {
-  provider: 'whisper' | 'parakeet';
+  provider: 'whisper' | 'parakeet' | 'groq';
   name: string;
   displayName: string;
   size_mb: number;
@@ -20,7 +21,7 @@ interface TranscriptModelConfig {
 }
 
 /**
- * Custom hook for fetching and managing transcription models (Whisper and Parakeet).
+ * Custom hook for fetching and managing transcription models (Whisper, Parakeet and Groq).
  *
  * This hook centralizes the model fetching logic that was previously duplicated
  * in ImportAudioDialog and RetranscribeDialog components.
@@ -77,6 +78,24 @@ export function useTranscriptionModels(transcriptModelConfig: TranscriptModelCon
       console.error('Failed to fetch Parakeet models:', err);
     }
 
+    // Groq (cloud) is offered once a key is saved, and preferred when the final
+    // transcription is switched on in settings.
+    let preferGroq = false;
+    try {
+      const finalSettings = await getFinalTranscriptionSettings();
+      if (finalSettings.hasApiKey) {
+        allModels.unshift({
+          provider: GROQ_PROVIDER,
+          name: GROQ_MODEL,
+          displayName: '☁️ Groq (nuvem): Whisper large-v3',
+          size_mb: 0,
+        });
+        preferGroq = finalSettings.finalProvider === GROQ_PROVIDER;
+      }
+    } catch (err) {
+      console.error('Failed to load final transcription settings:', err);
+    }
+
     setAvailableModels(allModels);
 
     // Set default model based on user's saved configuration
@@ -93,7 +112,9 @@ export function useTranscriptionModels(transcriptModelConfig: TranscriptModelCon
 
     // Only set default model if user hasn't manually selected one
     if (!userSelectedRef.current) {
-      if (configuredMatch) {
+      if (preferGroq) {
+        setSelectedModelKey(`${GROQ_PROVIDER}:${GROQ_MODEL}`);
+      } else if (configuredMatch) {
         // Use the configured model if available
         setSelectedModelKey(`${configuredMatch.provider}:${configuredMatch.name}`);
       } else if (allModels.length > 0) {

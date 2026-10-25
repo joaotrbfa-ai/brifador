@@ -713,6 +713,48 @@ pub async fn api_get_transcript_api_key<R: Runtime>(
     }
 }
 
+/// Final transcription (post-meeting Groq pass) settings. The API key itself never
+/// leaves Rust; the frontend only learns whether one is saved.
+#[tauri::command]
+pub async fn api_get_final_transcription_settings<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::audio::groq_transcription::FinalTranscriptionSettings, String> {
+    crate::audio::groq_transcription::load_final_settings(state.db_manager.pool())
+        .await
+        .map(|(settings, _key)| settings)
+        .map_err(|e| {
+            log_error!("Failed to load final transcription settings: {}", e);
+            e.to_string()
+        })
+}
+
+#[tauri::command]
+pub async fn api_save_final_transcription_settings<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    final_provider: Option<String>,
+    vocabulary: Option<String>,
+    api_key: Option<String>,
+) -> Result<(), String> {
+    log_info!(
+        "api_save_final_transcription_settings: provider={:?}, new key={}",
+        final_provider,
+        api_key.as_deref().is_some_and(|k| !k.trim().is_empty())
+    );
+    crate::audio::groq_transcription::save_final_settings(
+        state.db_manager.pool(),
+        final_provider.as_deref().filter(|p| !p.is_empty()),
+        vocabulary.as_deref().map(str::trim).filter(|v| !v.is_empty()),
+        api_key.as_deref(),
+    )
+    .await
+    .map_err(|e| {
+        log_error!("Failed to save final transcription settings: {}", e);
+        e.to_string()
+    })
+}
+
 #[tauri::command]
 pub async fn api_delete_api_key<R: Runtime>(
     _app: AppHandle<R>,

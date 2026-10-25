@@ -21,6 +21,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import { useConfig } from '@/contexts/ConfigContext';
 import { LANGUAGES } from '@/constants/languages';
+import { defaultBatchLanguage } from '@/lib/finalTranscription';
 import { useTranscriptionModels, ModelOption } from '@/hooks/useTranscriptionModels';
 import Analytics from '@/lib/analytics';
 
@@ -62,7 +63,7 @@ export function RetranscribeDialog({
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<RetranscriptionProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedLang, setSelectedLang] = useState(selectedLanguage || 'auto');
+  const [selectedLang, setSelectedLang] = useState(defaultBatchLanguage(selectedLanguage));
 
   // Use centralized model fetching hook
   const {
@@ -111,7 +112,7 @@ export function RetranscribeDialog({
       setIsProcessing(false);
       setProgress(null);
       setError(null);
-      setSelectedLang(selectedLanguage || 'auto');
+      setSelectedLang(defaultBatchLanguage(selectedLanguage));
 
       // Fetch available models using centralized hook
       fetchModels();
@@ -349,7 +350,7 @@ export function RetranscribeDialog({
                 <SelectContent>
                   {availableModels.map((model) => (
                     <SelectItem key={`${model.provider}:${model.name}`} value={`${model.provider}:${model.name}`}>
-                      {model.displayName} ({Math.round(model.size_mb)} MB)
+                      {model.displayName}{model.size_mb > 0 ? ` (${Math.round(model.size_mb)} MB)` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

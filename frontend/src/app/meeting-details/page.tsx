@@ -1,6 +1,7 @@
 "use client"
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { toast } from "sonner";
 import { MeetingSummary, SummaryProcessResponse, Transcript } from "@/types";
 import PageContent from "./page-content";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,6 +11,7 @@ import { LoaderIcon } from "lucide-react";
 import { useConfig } from "@/contexts/ConfigContext";
 import { usePaginatedTranscripts } from "@/hooks/usePaginatedTranscripts";
 import { parseSummaryContent } from "@/lib/summary-content";
+import { isGroqFinalTranscriptionEnabled, runGroqFinalTranscription } from "@/lib/finalTranscription";
 
 interface MeetingDetailsResponse {
   id: string;
@@ -34,6 +36,8 @@ function MeetingDetailsContent() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState<boolean>(false);
   const [hasCheckedAutoGen, setHasCheckedAutoGen] = useState<boolean>(false);
+  // The Groq pass can take minutes; keep the auto-generation check from starting twice.
+  const autoGenInFlightRef = useRef(false);
 
   // Use pagination hook for efficient transcript loading
   const {
@@ -63,15 +67,46 @@ function MeetingDetailsContent() {
     }
   }, []);
 
+  // Final transcription (Groq) replaces the live transcript before the summary runs.
+  // Returns once the transcript is final, whether the Groq pass worked or not.
+  const runFinalTranscriptionIfEnabled = useCallback(async (folderPath: string | undefined) => {
+    if (!meetingId || !folderPath || !(await isGroqFinalTranscriptionEnabled())) return;
+
+    const toastId = `final-transcription-${meetingId}`;
+    toast.loading('Melhorando a transcrição com a Groq...', { id: toastId });
+    try {
+      await runGroqFinalTranscription(meetingId, folderPath, (percentage, message) => {
+        toast.loading(`Melhorando a transcrição com a Groq... ${percentage}%`, {
+          id: toastId,
+          description: message,
+        });
+      });
+      await refetch();
+      toast.success('Transcrição final pronta', { id: toastId, description: undefined });
+    } catch (error) {
+      console.error('Final transcription failed:', error);
+      toast.error('Não deu para usar a Groq; o resumo vai usar a transcrição ao vivo', {
+        id: toastId,
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [meetingId, refetch]);
+
   // Set up auto-generation - respects DB as source of truth
   const setupAutoGeneration = useCallback(async () => {
-    if (hasCheckedAutoGen) return; // Only check once
+    if (hasCheckedAutoGen || autoGenInFlightRef.current) return; // Only check once
+    autoGenInFlightRef.current = true;
 
-    // Only auto-generate if navigated from recording
-    if (source !== 'recording') {
+    // Only auto-generate right after a recording or an import
+    if (source !== 'recording' && source !== 'import') {
       console.log('Not from recording navigation, skipping auto-generation');
       setHasCheckedAutoGen(true);
       return;
+    }
+
+    // Recordings get the cloud pass (imports were already transcribed with the chosen engine)
+    if (source === 'recording') {
+      await runFinalTranscriptionIfEnabled(meetingDetails?.folder_path);
     }
 
     // Respect user's auto-summary toggle preference
@@ -116,7 +151,7 @@ function MeetingDetailsContent() {
     }
 
     setHasCheckedAutoGen(true);
-  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary]);
+  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary, runFinalTranscriptionIfEnabled, meetingDetails?.folder_path]);
 
   // Sync meeting metadata from pagination hook to meeting details state
   useEffect(() => {
@@ -172,6 +207,7 @@ function MeetingDetailsContent() {
     // Reset auto-generation state to allow new meeting to be checked
     setHasCheckedAutoGen(false);
     setShouldAutoGenerate(false);
+    autoGenInFlightRef.current = false;
   }, [meetingId]);
 
   useEffect(() => {

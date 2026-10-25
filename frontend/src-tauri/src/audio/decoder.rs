@@ -20,7 +20,8 @@ use super::audio_processing::{audio_to_mono, resample, resample_audio};
 use super::ffmpeg::find_ffmpeg_path;
 
 /// Extensions requiring ffmpeg pre-conversion (Symphonia lacks these demuxers/codecs)
-const FFMPEG_ONLY_EXTENSIONS: &[&str] = &["mkv", "webm", "wma"];
+/// (Opus, AMR/3GP and CAF are common phone recording formats.)
+const FFMPEG_ONLY_EXTENSIONS: &[&str] = &["mkv", "webm", "wma", "opus", "amr", "3gp", "caf"];
 
 /// Progress callback for long-running operations
 /// Returns current progress (0-100) and a message
@@ -393,10 +394,36 @@ pub fn decode_audio_file(path: &Path) -> Result<DecodedAudio> {
     decode_audio_file_with_progress(path, None)
 }
 
-/// Decode an audio file with optional progress callback
+/// Decode an audio file with optional progress callback.
+///
+/// Symphonia handles the common formats natively. When it can't (Opus inside .ogg from
+/// WhatsApp, ALAC inside .m4a from the iPhone's lossless recorder, ...) the file is
+/// converted through the bundled ffmpeg instead.
 pub fn decode_audio_file_with_progress(
     path: &Path,
     progress_callback: Option<ProgressCallback>,
+) -> Result<DecodedAudio> {
+    let callback = progress_callback.as_ref();
+    match decode_audio_file_inner(path, callback, false) {
+        Ok(decoded) => Ok(decoded),
+        Err(native_error) if !needs_ffmpeg_conversion(path) && find_ffmpeg_path().is_some() => {
+            warn!(
+                "Native decoder failed for {} ({}); retrying through ffmpeg",
+                path.display(),
+                native_error
+            );
+            decode_audio_file_inner(path, callback, true).map_err(|ffmpeg_error| {
+                anyhow!("{} (ffmpeg also failed: {})", native_error, ffmpeg_error)
+            })
+        }
+        Err(native_error) => Err(native_error),
+    }
+}
+
+fn decode_audio_file_inner(
+    path: &Path,
+    progress_callback: Option<&ProgressCallback>,
+    force_ffmpeg: bool,
 ) -> Result<DecodedAudio> {
     info!("Decoding audio file: {}", path.display());
 
@@ -406,14 +433,14 @@ pub fn decode_audio_file_with_progress(
     // The _temp_wav_guard keeps the temp file alive until decoding completes,
     // then auto-deletes it when dropped (even on error/panic).
     let (_temp_wav_guard, decode_path): (Option<tempfile::TempPath>, Cow<'_, Path>) =
-        if needs_ffmpeg_conversion(path) {
+        if force_ffmpeg || needs_ffmpeg_conversion(path) {
             info!(
                 "Format requires ffmpeg pre-conversion: .{}",
                 path.extension()
                     .and_then(|e| e.to_str())
                     .unwrap_or("unknown")
             );
-            let temp_path = convert_to_wav_with_ffmpeg(path, progress_callback.as_ref())?;
+            let temp_path = convert_to_wav_with_ffmpeg(path, progress_callback)?;
             let wav_path = temp_path.to_path_buf();
             (Some(temp_path), Cow::Owned(wav_path))
         } else {
@@ -547,7 +574,7 @@ pub fn decode_audio_file_with_progress(
                 }
 
                 // Emit progress updates (every 10%)
-                if let (Some(callback), Some(expected)) = (&progress_callback, expected_samples) {
+                if let (Some(callback), Some(expected)) = (progress_callback, expected_samples) {
                     let current_progress = ((all_samples.len() as f64 / expected as f64) * 100.0) as u32;
                     if current_progress >= last_progress + 10 && current_progress <= 100 {
                         last_progress = current_progress;
@@ -563,7 +590,7 @@ pub fn decode_audio_file_with_progress(
     }
 
     // Ensure we report 100% completion
-    if let Some(callback) = &progress_callback {
+    if let Some(callback) = progress_callback {
         callback(100, "Decoding complete");
     }
 
@@ -623,6 +650,28 @@ mod tests {
             "whisper-format duration must be ~5s, got {:.2}s",
             duration_16k
         );
+    }
+
+    #[test]
+    fn test_decode_opus_in_ogg_falls_back_to_ffmpeg() {
+        // WhatsApp voice notes and call recorders save Opus inside .ogg. Symphonia
+        // probes the Ogg container but has no Opus decoder, so decoding must fall
+        // back to ffmpeg instead of failing the import.
+        if find_ffmpeg_path().is_none() {
+            eprintln!("skipping: ffmpeg not available");
+            return;
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/opus_3s.ogg");
+        let decoded = decode_audio_file(&path).expect("failed to decode Opus fixture");
+        assert!(
+            (decoded.duration_seconds - 3.0).abs() < 0.2,
+            "duration must be ~3s, got {:.2}s",
+            decoded.duration_seconds
+        );
+        let samples = decoded.to_whisper_format();
+        let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(peak > 0.1, "decoded audio must not be silent (peak {peak})");
     }
 
     #[test]
@@ -855,6 +904,11 @@ mod tests {
         assert!(needs_ffmpeg_conversion(Path::new("meeting.MKV")));
         assert!(needs_ffmpeg_conversion(Path::new("audio.WMA")));
         assert!(needs_ffmpeg_conversion(Path::new("audio.WebM")));
+        // Phone recording formats
+        assert!(needs_ffmpeg_conversion(Path::new("PTT-20261025-WA0001.opus")));
+        assert!(needs_ffmpeg_conversion(Path::new("chamada.amr")));
+        assert!(needs_ffmpeg_conversion(Path::new("gravacao.3gp")));
+        assert!(needs_ffmpeg_conversion(Path::new("Memo.caf")));
         // Symphonia-native formats should NOT need ffmpeg
         assert!(!needs_ffmpeg_conversion(Path::new("audio.mp4")));
         assert!(!needs_ffmpeg_conversion(Path::new("audio.wav")));
