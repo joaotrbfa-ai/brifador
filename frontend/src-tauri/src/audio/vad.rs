@@ -1,4 +1,7 @@
 use anyhow::{anyhow, Result};
+use rubato::{
+    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use silero_rs::{VadConfig, VadSession, VadTransition};
 use log::{debug, info, warn};
 use std::collections::VecDeque;
@@ -7,6 +10,120 @@ use std::time::Duration;
 /// Silero VAD only operates at 16kHz; input is resampled to this rate, and every
 /// sample count and timestamp inside this module is expressed in it.
 const VAD_SAMPLE_RATE: u32 = 16000;
+
+/// Streaming resampler from the capture rate down to `VAD_SAMPLE_RATE`.
+///
+/// The live pipeline feeds `ContinuousVadProcessor` 50ms windows of 48kHz audio,
+/// and the 16kHz output is what Silero sees AND what the transcription engine
+/// receives, so its quality matters for recognition, not just for detection.
+/// A persistent `SincFixedIn` keeps the filter history across calls (no seams
+/// at window boundaries) and gives a proper anti-aliasing low-pass at
+/// 0.95 x 8kHz instead of a short moving average.
+///
+/// `SincFixedIn` needs fixed-size input chunks, so arbitrary-length input is
+/// buffered until a full chunk is available (same pattern as the capture-side
+/// resampler in `pipeline.rs`). That adds at most `CHUNK_SIZE - 1` input samples
+/// (~10.6ms at 48kHz) of latency.
+///
+/// No delay compensation is applied: measured on a 1kHz + 1371Hz two-tone
+/// signal, output sample `n` lines up with input sample `3n + 2` (42us residual),
+/// so the filter's group delay is already absorbed by the resampler's own
+/// initial alignment. `flush()` pushes silence through the filter to recover the
+/// tail, and the total output length is exactly `round(input_len * 16000 / input_rate)`.
+struct VadResampler {
+    resampler: SincFixedIn<f32>,
+    ratio: f64,
+    pending: Vec<f32>,
+    input_total: usize,
+    output_total: usize,
+}
+
+impl VadResampler {
+    const CHUNK_SIZE: usize = 512;
+
+    fn new(input_sample_rate: u32) -> Result<Self> {
+        let ratio = VAD_SAMPLE_RATE as f64 / input_sample_rate as f64;
+
+        // Same parameters `audio_processing::resample` uses for large downsampling.
+        let params = SincInterpolationParameters {
+            sinc_len: 512,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Cubic,
+            oversampling_factor: 512,
+            window: WindowFunction::BlackmanHarris2,
+        };
+
+        let resampler = SincFixedIn::<f32>::new(ratio, 2.0, params, Self::CHUNK_SIZE, 1)
+            .map_err(|e| anyhow!("Failed to create VAD resampler: {}", e))?;
+
+        Ok(Self {
+            resampler,
+            ratio,
+            pending: Vec::with_capacity(Self::CHUNK_SIZE * 2),
+            input_total: 0,
+            output_total: 0,
+        })
+    }
+
+    /// Resample `samples`, returning every 16kHz sample that is ready. Input that
+    /// does not fill a whole chunk stays buffered for the next call or `flush()`.
+    fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>> {
+        self.pending.extend_from_slice(samples);
+        self.input_total += samples.len();
+
+        let mut out = Vec::with_capacity((self.pending.len() as f64 * self.ratio) as usize + 1);
+        let mut consumed = 0;
+        while self.pending.len() - consumed >= Self::CHUNK_SIZE {
+            let chunk = &self.pending[consumed..consumed + Self::CHUNK_SIZE];
+            let waves_out = self
+                .resampler
+                .process(&[chunk][..], None)
+                .map_err(|e| anyhow!("VAD resampling failed: {}", e))?;
+            consumed += Self::CHUNK_SIZE;
+            self.output_total += waves_out[0].len();
+            out.extend_from_slice(&waves_out[0]);
+        }
+        self.pending.drain(..consumed);
+
+        Ok(out)
+    }
+
+    /// Drain the buffered input and the filter tail, then reset for a new stream.
+    fn flush(&mut self) -> Result<Vec<f32>> {
+        let expected_total = (self.input_total as f64 * self.ratio).round() as usize;
+        let mut out = Vec::new();
+
+        if !self.pending.is_empty() {
+            let rest = std::mem::take(&mut self.pending);
+            let waves_out = self
+                .resampler
+                .process_partial(Some(&[rest][..]), None)
+                .map_err(|e| anyhow!("VAD resampler flush failed: {}", e))?;
+            self.output_total += waves_out[0].len();
+            out.extend_from_slice(&waves_out[0]);
+        }
+
+        // Feed silence until the filter tail of the real input has come out.
+        while self.output_total < expected_total {
+            let waves_out = self
+                .resampler
+                .process_partial(None::<&[Vec<f32>]>, None)
+                .map_err(|e| anyhow!("VAD resampler flush failed: {}", e))?;
+            self.output_total += waves_out[0].len();
+            out.extend_from_slice(&waves_out[0]);
+        }
+
+        // Anything beyond the real input length is the zero padding's own output.
+        let excess = (self.output_total - expected_total).min(out.len());
+        out.truncate(out.len() - excess);
+
+        self.resampler.reset();
+        self.input_total = 0;
+        self.output_total = 0;
+
+        Ok(out)
+    }
+}
 
 /// Represents a complete speech segment detected by VAD
 #[derive(Debug, Clone)]
@@ -21,7 +138,8 @@ pub struct SpeechSegment {
 pub struct ContinuousVadProcessor {
     session: VadSession,
     chunk_size: usize,
-    sample_rate: u32,
+    /// `None` when the input is already at `VAD_SAMPLE_RATE`.
+    resampler: Option<VadResampler>,
     buffer: Vec<f32>,
     speech_segments: VecDeque<SpeechSegment>,
     current_speech: Vec<f32>,
@@ -69,13 +187,19 @@ impl ContinuousVadProcessor {
         // VAD uses 30ms chunks at 16kHz (480 samples)
         let vad_chunk_size = (VAD_SAMPLE_RATE as f32 * 0.03) as usize; // 480 samples
 
+        let resampler = if input_sample_rate == VAD_SAMPLE_RATE {
+            None
+        } else {
+            Some(VadResampler::new(input_sample_rate)?)
+        };
+
         info!("VAD processor created: input={}Hz, vad={}Hz, chunk_size={} samples",
               input_sample_rate, VAD_SAMPLE_RATE, vad_chunk_size);
 
         Ok(Self {
             session,
             chunk_size: vad_chunk_size,
-            sample_rate: input_sample_rate, // Store input rate for resampling ratio in resample_to_16k()
+            resampler,
             buffer: Vec::with_capacity(vad_chunk_size * 2),
             speech_segments: VecDeque::new(),
             current_speech: Vec::new(),
@@ -91,13 +215,13 @@ impl ContinuousVadProcessor {
     /// Handles resampling from input sample rate to 16kHz for VAD processing
     pub fn process_audio(&mut self, samples: &[f32]) -> Result<Vec<SpeechSegment>> {
         // Resample to 16kHz if needed
-        let resampled_audio = if self.sample_rate == 16000 {
-            samples.to_vec()
-        } else {
-            self.resample_to_16k(samples)?
-        };
-
-        self.buffer.extend_from_slice(&resampled_audio);
+        match self.resampler.as_mut() {
+            Some(resampler) => {
+                let resampled_audio = resampler.process(samples)?;
+                self.buffer.extend_from_slice(&resampled_audio);
+            }
+            None => self.buffer.extend_from_slice(samples),
+        }
         let mut completed_segments = Vec::new();
 
         // Process complete 30ms chunks (480 samples at 16kHz)
@@ -114,62 +238,24 @@ impl ContinuousVadProcessor {
         Ok(completed_segments)
     }
 
-    /// Improved resampling from input sample rate to 16kHz with anti-aliasing
-    /// Uses linear interpolation and basic low-pass filtering for better quality
-    fn resample_to_16k(&self, samples: &[f32]) -> Result<Vec<f32>> {
-        if self.sample_rate == 16000 {
-            return Ok(samples.to_vec());
-        }
-
-        // Calculate downsampling ratio
-        let ratio = self.sample_rate as f64 / 16000.0;
-        let output_len = (samples.len() as f64 / ratio) as usize;
-        let mut resampled = Vec::with_capacity(output_len);
-
-        // Apply simple low-pass filter before downsampling to reduce aliasing
-        let cutoff_freq = 0.4; // Normalized frequency (0.4 * Nyquist)
-        let mut filtered_samples = Vec::with_capacity(samples.len());
-        
-        // Simple moving average filter (basic low-pass)
-        let filter_size = (self.sample_rate as f64 / (cutoff_freq * self.sample_rate as f64)) as usize;
-        let filter_size = std::cmp::max(1, std::cmp::min(filter_size, 5)); // Limit filter size
-        
-        for i in 0..samples.len() {
-            let start = if i >= filter_size { i - filter_size } else { 0 };
-            let end = std::cmp::min(i + filter_size + 1, samples.len());
-            let sum: f32 = samples[start..end].iter().sum();
-            filtered_samples.push(sum / (end - start) as f32);
-        }
-
-        // Linear interpolation downsampling
-        for i in 0..output_len {
-            let source_pos = i as f64 * ratio;
-            let source_index = source_pos as usize;
-            let fraction = source_pos - source_index as f64;
-            
-            if source_index + 1 < filtered_samples.len() {
-                // Linear interpolation
-                let sample1 = filtered_samples[source_index];
-                let sample2 = filtered_samples[source_index + 1];
-                let interpolated = sample1 + (sample2 - sample1) * fraction as f32;
-                resampled.push(interpolated);
-            } else if source_index < filtered_samples.len() {
-                resampled.push(filtered_samples[source_index]);
-            }
-        }
-
-        debug!("Resampled from {} samples ({}Hz) to {} samples (16kHz) with anti-aliasing",
-               samples.len(), self.sample_rate, resampled.len());
-
-        Ok(resampled)
-    }
-
     /// Flush any remaining audio and return final speech segments
     pub fn flush(&mut self) -> Result<Vec<SpeechSegment>> {
         debug!("VAD flush: in_speech={}, current_speech_len={}, buffer_len={}, speech_segments_queued={}",
               self.in_speech, self.current_speech.len(), self.buffer.len(), self.speech_segments.len());
 
         let mut completed_segments = Vec::new();
+
+        // Push the resampler's buffered input and filter tail through first, so the
+        // last real samples reach Silero before the final frame is padded.
+        if let Some(resampler) = self.resampler.as_mut() {
+            let tail = resampler.flush()?;
+            self.buffer.extend_from_slice(&tail);
+        }
+        while self.buffer.len() >= self.chunk_size {
+            let chunk: Vec<f32> = self.buffer.drain(..self.chunk_size).collect();
+            self.process_chunk(&chunk)?;
+        }
+
         // Preserve the real post-resampling endpoint before padding the final VAD frame.
         let real_end_sample = self.processed_samples + self.buffer.len();
 
@@ -442,6 +528,146 @@ where
     }
 
     Ok(all_segments)
+}
+
+#[cfg(test)]
+mod resampler_tests {
+    //! `VadResampler` tests. Unlike the Silero tests below, these need no ONNX Runtime.
+    use super::*;
+
+    const INPUT_RATE: u32 = 48000;
+
+    fn sine(freq_hz: f32, amplitude: f32, seconds: f32, sample_rate: u32) -> Vec<f32> {
+        let n = (seconds * sample_rate as f32) as usize;
+        (0..n)
+            .map(|i| {
+                let t = i as f64 / sample_rate as f64;
+                amplitude * (2.0 * std::f64::consts::PI * freq_hz as f64 * t).sin() as f32
+            })
+            .collect()
+    }
+
+    /// Feed `input` in pseudo-random chunk sizes (1..=2400, deterministic LCG,
+    /// many below the 512-sample resampler chunk), then flush.
+    fn resample_in_random_chunks(input: &[f32], seed: u64) -> (Vec<f32>, usize) {
+        let mut resampler = VadResampler::new(INPUT_RATE).expect("resampler");
+        let mut state = seed;
+        let mut out = Vec::new();
+        let mut pos = 0;
+        while pos < input.len() {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let len = (((state >> 33) % 2400) as usize + 1).min(input.len() - pos);
+            out.extend(resampler.process(&input[pos..pos + len]).expect("process"));
+            pos += len;
+        }
+        let before_flush = out.len();
+        out.extend(resampler.flush().expect("flush"));
+        (out, before_flush)
+    }
+
+    /// RMS gain in dB of `output` relative to a sine of `amplitude`, ignoring the
+    /// first and last 100ms where the filter sees the stream edges.
+    fn gain_db(output: &[f32], amplitude: f32) -> f64 {
+        let margin = VAD_SAMPLE_RATE as usize / 10;
+        let body = &output[margin..output.len() - margin];
+        let rms = (body.iter().map(|&x| (x as f64).powi(2)).sum::<f64>() / body.len() as f64).sqrt();
+        20.0 * (rms / (amplitude as f64 / std::f64::consts::SQRT_2)).log10()
+    }
+
+    #[test]
+    fn passband_tones_are_preserved() {
+        for freq in [1000.0, 6000.0] {
+            let input = sine(freq, 0.5, 2.0, INPUT_RATE);
+            let (output, _) = resample_in_random_chunks(&input, 7);
+            let gain = gain_db(&output, 0.5);
+            assert!(gain.abs() < 1.0, "{freq}Hz: gain {gain:.2}dB, expected within 1dB");
+        }
+    }
+
+    #[test]
+    fn tone_above_new_nyquist_is_rejected() {
+        // 12kHz would alias to 4kHz at 16kHz, right in the speech band.
+        let input = sine(12000.0, 0.5, 2.0, INPUT_RATE);
+        let (output, _) = resample_in_random_chunks(&input, 11);
+        let gain = gain_db(&output, 0.5);
+        assert!(gain < -40.0, "12kHz: gain {gain:.1}dB, expected below -40dB");
+    }
+
+    #[test]
+    fn output_length_tracks_input_length() {
+        let input = sine(1000.0, 0.5, 3.3, INPUT_RATE); // not a multiple of 512 or 3
+        let (output, before_flush) = resample_in_random_chunks(&input, 3);
+        let expected = (input.len() as f64 / 3.0).round() as usize;
+        assert_eq!(output.len(), expected, "flushed output must be exactly input/3");
+
+        // Before flush, only the buffered chunk remainder and the filter's
+        // lookahead (half the 512-tap sinc, ~85 output samples) may be missing.
+        let missing = expected - before_flush;
+        let max_missing = VadResampler::CHUNK_SIZE / 3 + 1 + 128;
+        assert!(missing <= max_missing, "{missing} samples held back before flush");
+    }
+
+    #[test]
+    fn output_is_time_aligned_with_input() {
+        // Two tones whose beat period is 1s, so the lag is unambiguous (a single
+        // 1kHz tone repeats every 48 samples and would fit many lags equally well).
+        // Measured alignment: output[n] == input[3n + 2], see VadResampler docs.
+        let a = sine(1000.0, 0.3, 1.0, INPUT_RATE);
+        let b = sine(1371.0, 0.2, 1.0, INPUT_RATE);
+        let input: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x + y).collect();
+        let (output, _) = resample_in_random_chunks(&input, 5);
+
+        let margin = VAD_SAMPLE_RATE as usize / 10;
+        let max_err = (margin..output.len() - margin)
+            .map(|n| (output[n] - input[3 * n + 2]).abs())
+            .fold(0.0f32, f32::max);
+        assert!(max_err < 0.01, "output deviates from time-aligned input by {max_err}");
+    }
+
+    #[test]
+    fn chunk_seams_leave_no_discontinuity() {
+        // Chunked processing must match one-shot processing sample for sample:
+        // any per-call state loss would show up as a mismatch at the seams.
+        let input = sine(1000.0, 0.5, 2.0, INPUT_RATE);
+
+        let mut one_shot = VadResampler::new(INPUT_RATE).expect("resampler");
+        let mut reference = one_shot.process(&input).expect("process");
+        reference.extend(one_shot.flush().expect("flush"));
+
+        for seed in [1, 2, 3] {
+            let (chunked, _) = resample_in_random_chunks(&input, seed);
+            assert_eq!(chunked.len(), reference.len());
+            let max_diff = chunked
+                .iter()
+                .zip(&reference)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0f32, f32::max);
+            assert!(max_diff < 1e-6, "seed {seed}: chunked output differs by {max_diff}");
+        }
+
+        // And the signal itself is smooth: a 0.5-amplitude 1kHz sine at 16kHz never
+        // moves more than 2*pi*1000/16000*0.5 ~= 0.196 between samples.
+        let max_step = reference[1..]
+            .iter()
+            .zip(&reference)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(max_step < 0.21, "max sample-to-sample step {max_step}");
+    }
+
+    #[test]
+    fn flush_resets_for_a_new_stream() {
+        let input = sine(1000.0, 0.5, 0.5, INPUT_RATE);
+        let mut resampler = VadResampler::new(INPUT_RATE).expect("resampler");
+
+        let mut first = resampler.process(&input).expect("process");
+        first.extend(resampler.flush().expect("flush"));
+        assert!(resampler.flush().expect("second flush").is_empty());
+
+        let mut second = resampler.process(&input).expect("process");
+        second.extend(resampler.flush().expect("flush"));
+        assert_eq!(first, second);
+    }
 }
 
 #[cfg(test)]
