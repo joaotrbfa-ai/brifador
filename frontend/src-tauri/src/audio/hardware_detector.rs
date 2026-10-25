@@ -207,7 +207,9 @@ impl HardwareProfile {
         {
             return AdaptiveWhisperConfig {
                 beam_size: 2,
-                temperature: 0.2,
+                // Must stay 0.0: with temperature > 0, whisper.cpp 1.7.1 replaces beam
+                // search with sampling using `best_of` (=1), so beam_size is ignored.
+                temperature: 0.0,
                 use_gpu: self.has_gpu_acceleration,
                 max_threads: Some(self.cpu_cores.min(8) as usize),
                 chunk_size_preference: ChunkSizePreference::Balanced,
