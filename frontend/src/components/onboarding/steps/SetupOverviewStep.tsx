@@ -98,7 +98,7 @@ export function SetupOverviewStep() {
           </Button>
           <div className="text-center">
             <a
-              href="https://github.com/Zackriya-Solutions/meeting-minutes"
+              href="https://github.com/joaotrbfa-ai/brifador/issues"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-muted-foreground hover:underline"

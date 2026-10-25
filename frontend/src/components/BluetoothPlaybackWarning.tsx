@@ -79,15 +79,6 @@ export function BluetoothPlaybackWarning({
             As gravações podem soar distorcidas ou aceleradas em dispositivos Bluetooth.
             Para uma revisão fiel, use os <strong>alto-falantes do computador</strong> ou{' '}
             <strong>fones de ouvido com fio</strong>.
-            <br />
-            <a
-              href="https://github.com/your-org/meetily/blob/main/BLUETOOTH_PLAYBACK_NOTICE.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-yellow-900 font-medium mt-2 inline-block"
-            >
-              Saiba por que isso acontece →
-            </a>
           </AlertDescription>
         </div>
         <Button

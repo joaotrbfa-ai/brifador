@@ -1149,13 +1149,24 @@ pub async fn debug_backend_connection<R: Runtime>(app: AppHandle<R>) -> Result<S
 pub async fn open_external_url(url: String) -> Result<(), String> {
     use std::process::Command;
 
+    // Only web links: keeps the webview from using this command to launch
+    // local programs or inject shell commands.
+    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!("Unsupported URL scheme: {}", parsed.scheme()));
+    }
+    let url = parsed.as_str();
+
     let result = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(&["/C", "start", &url]).output()
+        // rundll32 does not go through cmd.exe, so characters like & stay part of the URL
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
+            .output()
     } else if cfg!(target_os = "macos") {
-        Command::new("open").arg(&url).output()
+        Command::new("open").arg(url).output()
     } else {
         // Linux and other Unix-like systems
-        Command::new("xdg-open").arg(&url).output()
+        Command::new("xdg-open").arg(url).output()
     };
 
     match result {
