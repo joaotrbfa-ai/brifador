@@ -8,6 +8,7 @@ import { updateService, UpdateInfo } from '@/services/updateService';
 import { Button } from './ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import BrandFooter from './BrandFooter';
 
 
 export function About() {
@@ -23,7 +24,7 @@ export function About() {
 
     const handleContactClick = async () => {
         try {
-            await invoke('open_external_url', { url: 'https://meetily.zackriya.com/#about' });
+            await invoke('open_external_url', { url: 'https://joaobustamante.eu' });
         } catch (error) {
             console.error('Failed to open link:', error);
         }
@@ -86,7 +87,7 @@ export function About() {
                         )}
                     </Button>
                     {updateInfo?.available && (
-                        <div className="mt-2 text-xs text-blue-600">
+                        <div className="mt-2 text-xs text-primary">
                             Update available: v{updateInfo.version}
                         </div>
                     )}
@@ -117,8 +118,8 @@ export function About() {
             </div>
 
             {/* Coming Soon - Compact */}
-            <div className="bg-blue-50 rounded p-3">
-                <p className="text-s text-blue-800">
+            <div className="bg-accent rounded p-3">
+                <p className="text-s text-accent-foreground">
                     <span className="font-bold">Coming soon:</span> A library of on-device AI agents-automating follow-ups, action tracking, and more.
                 </p>
             </div>
@@ -131,18 +132,19 @@ export function About() {
                 </p>
                 <button
                     onClick={handleContactClick}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm hover:shadow-md"
+                    className="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded transition-colors duration-200 shadow-sm hover:shadow-md"
                 >
-                    Chat with the Zackriya team
+                    Conheça o João Bustamante
                 </button>
             </div>
 
             {/* Footer - Compact */}
             <div className="pt-2 border-t border-gray-200 text-center">
                 <p className="text-xs text-gray-400">
-                    Built by Zackriya Solutions
+                    Feito por João Bustamante · baseado no Meetily (Zackriya Solutions)
                 </p>
             </div>
+            <BrandFooter />
             <AnalyticsConsentSwitch />
 
             {/* Update Dialog */}

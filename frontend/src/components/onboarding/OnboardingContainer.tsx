@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { ProgressIndicator } from './shared/ProgressIndicator';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import type { OnboardingContainerProps } from '@/types/onboarding';
+import BrandFooter from '@/components/BrandFooter';
 
 export function OnboardingContainer({
   title,
@@ -43,7 +44,7 @@ export function OnboardingContainer({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 overflow-hidden">
+    <div className="fixed inset-0 bg-background flex items-center justify-center z-50 overflow-hidden">
       <div className={cn('w-full max-w-2xl h-full max-h-screen flex flex-col px-6 py-6', className)}>
         {/* Progress Indicator with Navigation - Fixed */}
         {step && !hideProgress && (
@@ -55,9 +56,9 @@ export function OnboardingContainer({
                   onClick={handlePrevious}
                   disabled={!canGoPrevious || step === 1}
                   className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center transition-all duration-200',
+                    'pointer-events-auto w-8 h-8 rounded-full bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-200',
                     canGoPrevious && step !== 1
-                      ? 'hover:bg-gray-50 hover:shadow-md hover:scale-110 text-gray-700'
+                      ? 'hover:bg-background hover:shadow-md hover:scale-110 text-foreground'
                       : 'opacity-0 cursor-not-allowed'
                   )}
                 >
@@ -68,9 +69,9 @@ export function OnboardingContainer({
                   onClick={handleNext}
                   disabled={!canGoNext || step === totalSteps}
                   className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center transition-all duration-200',
+                    'pointer-events-auto w-8 h-8 rounded-full bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-200',
                     canGoNext && step !== totalSteps
-                      ? 'hover:bg-gray-50 hover:shadow-md hover:scale-110 text-gray-700'
+                      ? 'hover:bg-background hover:shadow-md hover:scale-110 text-foreground'
                       : 'opacity-0 cursor-not-allowed'
                   )}
                 >
@@ -86,9 +87,9 @@ export function OnboardingContainer({
 
         {/* Header - Fixed */}
         <div className="mb-4 text-center space-y-3 flex-shrink-0">
-          <h1 className="text-4xl font-semibold text-gray-900 animate-fade-in-up">{title}</h1>
+          <h1 className="text-4xl font-semibold text-foreground animate-fade-in-up">{title}</h1>
           {description && (
-            <p className="text-base text-gray-600 max-w-md mx-auto animate-fade-in-up delay-75">
+            <p className="text-base text-muted-foreground max-w-md mx-auto animate-fade-in-up delay-75">
               {description}
             </p>
           )}
@@ -97,6 +98,11 @@ export function OnboardingContainer({
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto pr-2">
           <div className="space-y-6">{children}</div>
+        </div>
+
+        {/* Assinatura - Fixed */}
+        <div className="flex-shrink-0 pt-3">
+          <BrandFooter />
         </div>
       </div>
     </div>
