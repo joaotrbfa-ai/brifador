@@ -101,41 +101,124 @@ pub struct MessageContent {
     pub reasoning_content: Option<String>,
 }
 
-// Claude-specific request structure
+const ANTHROPIC_API_VERSION: &str = "2026-10-21";
+// Shared budget: adaptive thinking is always on for the current models and
+// spends from this same limit as the visible answer.
+const CLAUDE_MAX_TOKENS: u32 = 16000;
+const CLAUDE_SERVER_SIDE_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
+const CLAUDE_MAX_RETRIES: u32 = 2;
+const CLAUDE_MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+const CLAUDE_BASE_BACKOFF: Duration = Duration::from_secs(2);
+
+/// Models that accept the server-side `fallbacks: "default"` parameter.
+/// Haiku 5.5 has no server-side fallback and older models do not accept it.
+fn claude_uses_server_side_fallback(model_name: &str) -> bool {
+    matches!(model_name, "claude-opus-5-5" | "claude-sonnet-5-5")
+}
+
+// Claude-specific request structure. Sampling parameters (`temperature`,
+// `top_p`, `top_k`) and `thinking` are intentionally absent: API version
+// 2026-10-21 rejects sampling parameters, and thinking stays adaptive.
 #[derive(Debug, Serialize)]
 pub struct ClaudeRequest {
     pub model: String,
     pub max_tokens: u32,
     pub system: String,
     pub messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallbacks: Option<&'static str>,
+}
+
+fn build_claude_request_body(
+    model_name: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> serde_json::Value {
+    serde_json::json!(ClaudeRequest {
+        model: model_name.to_string(),
+        max_tokens: CLAUDE_MAX_TOKENS,
+        system: system_prompt.to_string(),
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
+            content: user_prompt.to_string(),
+        }],
+        fallbacks: claude_uses_server_side_fallback(model_name).then_some("default"),
+    })
+}
+
+fn claude_status_is_retryable(status: reqwest::StatusCode) -> bool {
+    // 529 (overloaded) is a 5xx status as well.
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+/// Delay before Claude retry number `attempt` (0-based): the `retry-after`
+/// header in seconds when present (capped), otherwise 2 s, then 4 s.
+fn claude_retry_delay(headers: &header::HeaderMap, attempt: u32) -> Duration {
+    headers
+        .get(header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .map(|seconds| Duration::from_secs_f64(seconds).min(CLAUDE_MAX_RETRY_AFTER))
+        .unwrap_or_else(|| CLAUDE_BASE_BACKOFF * 2_u32.pow(attempt))
 }
 
 // Claude-specific response structure
 #[derive(Deserialize, Debug)]
 pub struct ClaudeChatResponse {
     pub content: Vec<ClaudeChatContent>,
+    #[serde(default)]
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ClaudeChatContent {
     #[serde(rename = "type")]
     pub block_type: String,
+    #[serde(default)]
     pub text: Option<String>,
+    #[serde(default)]
+    pub thinking: Option<String>,
 }
 
 impl ClaudeChatResponse {
-    fn completion(&self) -> Option<LlmCompletion> {
-        let content = self
+    fn completion(&self) -> Result<LlmCompletion, String> {
+        match self.stop_reason.as_deref() {
+            Some("max_tokens") => {
+                return Err("O resumo foi cortado pelo limite de tokens. Tente gerar de novo \
+                    ou use outro modelo de resumo."
+                    .to_string())
+            }
+            Some("refusal") => {
+                return Err("O Claude recusou gerar este resumo. Tente outro modelo de resumo."
+                    .to_string())
+            }
+            _ => {}
+        }
+
+        // Only `text` blocks are visible output; `thinking`, `redacted_thinking`
+        // and `fallback` (server-side fallback marker) blocks are skipped.
+        let texts: Vec<&str> = self
             .content
             .iter()
-            .find(|block| block.block_type == "text")
-            .and_then(|block| block.text.as_deref())?
-            .trim()
-            .to_string();
-        Some(LlmCompletion {
-            content,
-            reasoning_stripped: self.content.iter().any(|block| {
-                matches!(block.block_type.as_str(), "thinking" | "redacted_thinking")
+            .filter(|block| block.block_type == "text")
+            .filter_map(|block| block.text.as_deref())
+            .collect();
+        if texts.is_empty() {
+            return Err("No text content in LLM response".to_string());
+        }
+
+        Ok(LlmCompletion {
+            content: texts.concat().trim().to_string(),
+            // Current models always return (usually empty) thinking blocks;
+            // only flag reasoning that actually had content.
+            reasoning_stripped: self.content.iter().any(|block| match block.block_type.as_str() {
+                "thinking" => block
+                    .thinking
+                    .as_deref()
+                    .is_some_and(|thinking| !thinking.trim().is_empty()),
+                "redacted_thinking" => true,
+                _ => false,
             }),
         })
     }
@@ -243,7 +326,7 @@ impl LLMProvider {
 /// # Arguments
 /// * `client` - Reqwest HTTP client (reused for performance)
 /// * `provider` - The LLM provider to use
-/// * `model_name` - The specific model to use (e.g., "gpt-4", "claude-3-opus")
+/// * `model_name` - The specific model to use (e.g., "gpt-4", "claude-opus-5-5")
 /// * `api_key` - API key for the provider (not needed for Ollama)
 /// * `system_prompt` - System instructions for the LLM
 /// * `user_prompt` - User query/content to process
@@ -338,10 +421,14 @@ pub(crate) async fn generate_summary(
             );
             header_map.insert(
                 "anthropic-version",
-                "2023-06-01"
-                    .parse()
-                    .map_err(|_| "Invalid anthropic version".to_string())?,
+                header::HeaderValue::from_static(ANTHROPIC_API_VERSION),
             );
+            if claude_uses_server_side_fallback(model_name) {
+                header_map.insert(
+                    "anthropic-beta",
+                    header::HeaderValue::from_static(CLAUDE_SERVER_SIDE_FALLBACK_BETA),
+                );
+            }
             ("https://api.anthropic.com/v1/messages".to_string(), header_map)
         }
         LLMProvider::BuiltInAI => {
@@ -378,59 +465,53 @@ pub(crate) async fn generate_summary(
             top_p,
         )
     } else {
-        serde_json::json!(ClaudeRequest {
-            system: system_prompt.to_string(),
-            model: model_name.to_string(),
-            // Shared budget: on models with thinking enabled by default this
-            // covers thinking tokens as well as the answer.
-            max_tokens: 8192,
-            messages: vec![ChatMessage {
-                role: "user".to_string(),
-                content: user_prompt.to_string(),
-            }]
-        })
+        build_claude_request_body(model_name, system_prompt, user_prompt)
     };
 
     info!("🐞 LLM Request to {}: model={}", provider_name(provider), model_name);
 
-    // Send request with timeout and cancellation support
-    let request_future = client
-        .post(api_url.clone())
-        .headers(headers.clone())
-        .json(&request_body)
-        .timeout(REQUEST_TIMEOUT_DURATION)
-        .send();
+    // Send request with timeout and cancellation support. Claude requests are
+    // retried on rate limits (429), overloads (529) and other 5xx errors.
+    let mut attempt = 0;
+    let response = loop {
+        let request_future = client
+            .post(api_url.clone())
+            .headers(headers.clone())
+            .json(&request_body)
+            .timeout(REQUEST_TIMEOUT_DURATION)
+            .send();
+        let response = await_or_cancel(request_future, cancellation_token)
+            .await?
+            .map_err(|e| {
+                if e.is_timeout() {
+                    format!(
+                        "LLM request timed out after {} seconds",
+                        REQUEST_TIMEOUT_DURATION.as_secs()
+                    )
+                } else {
+                    format!("Failed to send request to LLM: {}", e)
+                }
+            })?;
 
-    // Use tokio::select to race between cancellation and request completion
-    let response = if let Some(token) = cancellation_token {
-        tokio::select! {
-            result = request_future => {
-                result.map_err(|e| {
-                    if e.is_timeout() {
-                        format!(
-                            "LLM request timed out after {} seconds",
-                            REQUEST_TIMEOUT_DURATION.as_secs()
-                        )
-                    } else {
-                        format!("Failed to send request to LLM: {}", e)
-                    }
-                })?
-            }
-            _ = token.cancelled() => {
-                return Err("Summary generation was cancelled".to_string());
-            }
+        let status = response.status();
+        if provider != &LLMProvider::Claude
+            || attempt >= CLAUDE_MAX_RETRIES
+            || !claude_status_is_retryable(status)
+        {
+            break response;
         }
-    } else {
-        request_future.await.map_err(|e| {
-            if e.is_timeout() {
-                format!(
-                    "LLM request timed out after {} seconds",
-                    REQUEST_TIMEOUT_DURATION.as_secs()
-                )
-            } else {
-                format!("Failed to send request to LLM: {}", e)
-            }
-        })?
+
+        let delay = claude_retry_delay(response.headers(), attempt);
+        attempt += 1;
+        warn!(
+            "Claude returned status {}; retry {}/{} in {:.1}s",
+            status,
+            attempt,
+            CLAUDE_MAX_RETRIES,
+            delay.as_secs_f64()
+        );
+        drop(response);
+        await_or_cancel(tokio::time::sleep(delay), cancellation_token).await?;
     };
 
     let response = if response.status().is_success() {
@@ -493,12 +574,12 @@ pub(crate) async fn generate_summary(
         .await?
         .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
 
-        info!("🐞 LLM Response received from Claude");
+        info!(
+            "🐞 LLM Response received from Claude (stop_reason={})",
+            chat_response.stop_reason.as_deref().unwrap_or("unknown")
+        );
 
-        let completion = chat_response
-            .completion()
-            .ok_or("No text content in LLM response")?;
-        Ok(completion)
+        chat_response.completion()
     } else {
         let chat_response = await_or_cancel(
             response.json::<ChatResponse>(),
@@ -904,11 +985,135 @@ mod tests {
         .unwrap();
         assert_eq!(
             response.completion(),
-            Some(LlmCompletion {
+            Ok(LlmCompletion {
                 content: "Meeting summary.".to_string(),
                 reasoning_stripped: true,
             })
         );
+    }
+
+    #[test]
+    fn claude_response_concatenates_every_text_block() {
+        let response: ClaudeChatResponse = serde_json::from_value(json!({
+            "stop_reason": "end_turn",
+            "content": [
+                {"type": "fallback", "from": {"model": "claude-opus-5-5"}, "to": {"model": "claude-opus-4-8"}},
+                {"type": "thinking", "thinking": "", "signature": "sig"},
+                {"type": "text", "text": "# Resumo\n\n"},
+                {"type": "redacted_thinking", "data": "opaque"},
+                {"type": "text", "text": "- Decisão tomada."}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            response.completion(),
+            Ok(LlmCompletion {
+                content: "# Resumo\n\n- Decisão tomada.".to_string(),
+                reasoning_stripped: true,
+            })
+        );
+    }
+
+    #[test]
+    fn claude_empty_thinking_is_not_reported_as_stripped_reasoning() {
+        let response: ClaudeChatResponse = serde_json::from_value(json!({
+            "stop_reason": "end_turn",
+            "content": [
+                {"type": "thinking", "thinking": "", "signature": "sig"},
+                {"type": "text", "text": "Resumo."}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            response.completion(),
+            Ok(LlmCompletion {
+                content: "Resumo.".to_string(),
+                reasoning_stripped: false,
+            })
+        );
+    }
+
+    #[test]
+    fn claude_max_tokens_and_refusal_are_errors_even_with_text() {
+        for (stop_reason, expected) in [
+            ("max_tokens", "O resumo foi cortado pelo limite de tokens"),
+            ("refusal", "O Claude recusou gerar este resumo"),
+        ] {
+            let response: ClaudeChatResponse = serde_json::from_value(json!({
+                "stop_reason": stop_reason,
+                "content": [{"type": "text", "text": "Resumo parcial"}]
+            }))
+            .unwrap();
+            let error = response.completion().unwrap_err();
+            assert!(error.starts_with(expected), "{stop_reason}: {error}");
+        }
+    }
+
+    #[test]
+    fn claude_response_without_text_is_an_error() {
+        let response: ClaudeChatResponse = serde_json::from_value(json!({
+            "stop_reason": "end_turn",
+            "content": [{"type": "thinking", "thinking": ""}]
+        }))
+        .unwrap();
+        assert_eq!(
+            response.completion(),
+            Err("No text content in LLM response".to_string())
+        );
+    }
+
+    #[test]
+    fn claude_body_sends_fallbacks_only_for_opus_and_sonnet_5_5() {
+        for model in ["claude-opus-5-5", "claude-sonnet-5-5"] {
+            let body = build_claude_request_body(model, "sys", "user");
+            assert_eq!(body["fallbacks"], "default", "{model}");
+        }
+        for model in ["claude-haiku-5-5", "claude-opus-5", "claude-sonnet-4-5-20250929"] {
+            let body = build_claude_request_body(model, "sys", "user");
+            assert!(body.get("fallbacks").is_none(), "{model}");
+        }
+    }
+
+    #[test]
+    fn claude_body_has_no_sampling_or_thinking_fields() {
+        let body = build_claude_request_body("claude-opus-5-5", "sys", "user");
+        assert_eq!(body["max_tokens"], 16000);
+        assert_eq!(body["system"], "sys");
+        assert_eq!(body["messages"][0]["role"], "user");
+        assert_eq!(body["messages"][0]["content"], "user");
+        for field in ["temperature", "top_p", "top_k", "thinking"] {
+            assert!(body.get(field).is_none(), "{field}");
+        }
+    }
+
+    #[test]
+    fn claude_retries_rate_limits_overloads_and_server_errors_only() {
+        for status in [429, 500, 502, 503, 529] {
+            assert!(claude_status_is_retryable(
+                reqwest::StatusCode::from_u16(status).unwrap()
+            ));
+        }
+        for status in [400, 401, 403, 404, 413] {
+            assert!(!claude_status_is_retryable(
+                reqwest::StatusCode::from_u16(status).unwrap()
+            ));
+        }
+    }
+
+    #[test]
+    fn claude_retry_delay_respects_retry_after_with_cap_and_backoff() {
+        let mut headers = header::HeaderMap::new();
+        assert_eq!(claude_retry_delay(&headers, 0), Duration::from_secs(2));
+        assert_eq!(claude_retry_delay(&headers, 1), Duration::from_secs(4));
+
+        headers.insert(header::RETRY_AFTER, header::HeaderValue::from_static("7"));
+        assert_eq!(claude_retry_delay(&headers, 1), Duration::from_secs(7));
+
+        headers.insert(header::RETRY_AFTER, header::HeaderValue::from_static("600"));
+        assert_eq!(claude_retry_delay(&headers, 0), Duration::from_secs(60));
+
+        headers.insert(header::RETRY_AFTER, header::HeaderValue::from_static("soon"));
+        assert_eq!(claude_retry_delay(&headers, 0), Duration::from_secs(2));
     }
 }
 
