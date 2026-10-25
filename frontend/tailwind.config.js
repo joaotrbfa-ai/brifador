@@ -10,7 +10,13 @@ module.exports = {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'var(--font-source-sans-3)'
+  				'var(--font-plex-sans)', 'system-ui', 'sans-serif'
+  			],
+  			display: [
+  				'var(--font-archivo)', 'Arial Narrow', 'Arial', 'sans-serif'
+  			],
+  			mono: [
+  				'var(--font-plex-mono)', 'ui-monospace', 'Consolas', 'monospace'
   			]
   		},
   		colors: {

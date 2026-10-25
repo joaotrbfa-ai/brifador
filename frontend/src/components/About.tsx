@@ -7,6 +7,7 @@ import { updateService, UpdateInfo } from '@/services/updateService';
 import { Button } from './ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import BrandFooter from './BrandFooter';
 
 
 export function About() {
@@ -59,9 +60,9 @@ export function About() {
                         className="mx-auto"
                     />
                 </div>
-                {/* <h1 className="text-xl font-bold text-gray-900">Meetily</h1> */}
-                <span className="text-sm text-gray-500"> v{currentVersion}</span>
-                <p className="text-medium text-gray-600 mt-1">
+                {/* <h1 className="text-xl font-bold text-foreground">Meetily</h1> */}
+                <span className="text-sm text-muted-foreground"> v{currentVersion}</span>
+                <p className="text-medium text-muted-foreground mt-1">
                     Notas e resumos em tempo real que nunca saem do seu computador.
                 </p>
                 <div className="mt-3">
@@ -85,7 +86,7 @@ export function About() {
                         )}
                     </Button>
                     {updateInfo?.available && (
-                        <div className="mt-2 text-xs text-blue-600">
+                        <div className="mt-2 text-xs text-primary">
                             Atualização disponível: v{updateInfo.version}
                         </div>
                     )}
@@ -94,35 +95,35 @@ export function About() {
 
             {/* Features Grid - Compact */}
             <div className="space-y-3">
-                <h2 className="text-base font-semibold text-gray-800">O que torna o Brifador diferente</h2>
+                <h2 className="text-base font-semibold text-foreground">O que torna o Brifador diferente</h2>
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Privacidade em primeiro lugar</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Seus dados e o processamento de IA podem ficar no seu próprio computador. Sem nuvem, sem vazamentos.</p>
+                    <div className="bg-background rounded p-3 hover:bg-secondary transition-colors">
+                        <h3 className="font-bold text-sm text-foreground mb-1">Privacidade em primeiro lugar</h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Seus dados e o processamento de IA podem ficar no seu próprio computador. Sem nuvem, sem vazamentos.</p>
                     </div>
-                    <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Use qualquer modelo</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Prefere um modelo local de código aberto? Ótimo. Quer conectar uma API externa? Também pode. Sem dependência de fornecedor.</p>
+                    <div className="bg-background rounded p-3 hover:bg-secondary transition-colors">
+                        <h3 className="font-bold text-sm text-foreground mb-1">Use qualquer modelo</h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Prefere um modelo local de código aberto? Ótimo. Quer conectar uma API externa? Também pode. Sem dependência de fornecedor.</p>
                     </div>
-                    <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Econômico</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Evite cobranças por minuto rodando os modelos localmente (ou pague apenas pelas chamadas que escolher).</p>
+                    <div className="bg-background rounded p-3 hover:bg-secondary transition-colors">
+                        <h3 className="font-bold text-sm text-foreground mb-1">Econômico</h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Evite cobranças por minuto rodando os modelos localmente (ou pague apenas pelas chamadas que escolher).</p>
                     </div>
-                    <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Funciona em qualquer lugar</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Google Meet, Zoom, Teams, online ou offline.</p>
+                    <div className="bg-background rounded p-3 hover:bg-secondary transition-colors">
+                        <h3 className="font-bold text-sm text-foreground mb-1">Funciona em qualquer lugar</h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Google Meet, Zoom, Teams, online ou offline.</p>
                     </div>
                 </div>
             </div>
 
             {/* Footer - Compact */}
-            <div className="pt-2 border-t border-gray-200 text-center">
-                <p className="text-xs text-gray-400">
+            <div className="pt-2 border-t border-border text-center">
+                <p className="text-xs text-muted-foreground">
                     Baseado no{' '}
                     <button
                         type="button"
                         onClick={handleCreditClick}
-                        className="underline hover:text-gray-600"
+                        className="underline hover:text-muted-foreground"
                     >
                         Meetily
                     </button>
