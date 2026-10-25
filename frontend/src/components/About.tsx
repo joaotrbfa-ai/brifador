@@ -11,7 +11,7 @@ import BrandFooter from './BrandFooter';
 
 
 export function About() {
-    const [currentVersion, setCurrentVersion] = useState<string>('0.4.1');
+    const [currentVersion, setCurrentVersion] = useState<string>('');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [isChecking, setIsChecking] = useState(false);
     const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -61,7 +61,7 @@ export function About() {
                     />
                 </div>
                 {/* <h1 className="text-xl font-bold text-foreground">Meetily</h1> */}
-                <span className="text-sm text-muted-foreground"> v{currentVersion}</span>
+                {currentVersion && <span className="text-sm text-muted-foreground"> v{currentVersion}</span>}
                 <p className="text-medium text-muted-foreground mt-1">
                     Notas e resumos em tempo real que nunca saem do seu computador.
                 </p>
@@ -130,6 +130,7 @@ export function About() {
                     , da Zackriya Solutions (licença MIT)
                 </p>
             </div>
+            <BrandFooter />
 
             {/* Update Dialog */}
             <UpdateDialog

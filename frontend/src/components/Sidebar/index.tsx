@@ -11,6 +11,7 @@ import { SettingTabs } from '../SettingTabs';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -77,6 +78,11 @@ const Sidebar: React.FC = () => {
     model: 'parakeet-tdt-0.6b-v3-int8',
   });
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('');
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(console.error);
+  }, []);
 
   // State for edit modal
   const [editModalState, setEditModalState] = useState<{ isOpen: boolean; meetingId: string | null; currentTitle: string }>({
@@ -166,7 +172,7 @@ const Sidebar: React.FC = () => {
     const setupListener = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
-        console.log('Sidebar received model-config-updated event:', event.payload);
+        console.log('Sidebar received model-config-updated event:', { provider: event.payload?.provider, model: event.payload?.model });
         setModelConfig(event.payload);
       });
 
@@ -218,7 +224,7 @@ const Sidebar: React.FC = () => {
         model: configToSave.model,
         apiKey: configToSave.apiKey ?? null
       };
-      console.log('Saving transcript config with payload:', payload);
+      console.log('Saving transcript config:', { provider: payload.provider, model: payload.model });
 
       await invoke('api_save_transcript_config', {
         provider: payload.provider,
@@ -813,7 +819,7 @@ const Sidebar: React.FC = () => {
             <Info isCollapsed={isCollapsed} />
             <BrandFooter />
             <div className="w-full flex items-center justify-center px-3 pb-1 font-mono text-[10px] text-muted-foreground/70">
-              v0.4.1
+              {appVersion && `v${appVersion}`}
             </div>
           </div>
         )}
